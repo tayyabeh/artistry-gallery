@@ -26,11 +26,16 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
     }
     
     setIsLoading(true);
+    console.log('Attempting signup with:', { email, username, password: '***' });
     
     try {
-      await signup(email, username, password);
-    } catch (err) {
-      setError('Failed to create an account');
+      // Pass username as displayName as well
+      await signup(email, username, password, username);
+      console.log('Signup successful');
+    } catch (err: any) {
+      console.error('Detailed signup error:', err);
+      // Show more specific error message if available
+      setError(err.message || 'Failed to create an account');
     } finally {
       setIsLoading(false);
     }

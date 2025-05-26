@@ -10,7 +10,13 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/artistry', {
+const mongoUri = process.env.MONGODB_URI;
+if (!mongoUri) {
+  console.error('MongoDB URI not found in environment variables');
+  process.exit(1);
+}
+
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
