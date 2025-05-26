@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
@@ -16,12 +15,18 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Also check if username is taken
+    user = await User.findOne({ username });
+    if (user) {
+      return res.status(400).json({ message: 'Username is already taken' });
+    }
+
     // Create new user
     user = new User({
       username,
       email,
       password,
-      displayName,
+      displayName: displayName || username,
       profileImage: '/images/default-avatar.png'
     });
 
@@ -39,13 +44,29 @@ router.post('/register', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' },
       (err, token) => {
-        if (err) throw err;
+        if (err) {
+          console.error('JWT signing error:', err);
+          return res.status(500).json({ message: 'Error creating authentication token' });
+        }
         res.json({ token });
       }
     );
   } catch (error) {
-    console.error(error.message);
-    res.status(500).send('Server error');
+    console.error('Registration error details:', error);
+    
+    // Check for MongoDB duplicate key error
+    if (error.code === 11000) {
+      // Extract the duplicate field name
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ 
+        message: `That ${field} is already registered. Please use a different ${field}.` 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error during registration', 
+      error: error.message 
+    });
   }
 });
 
