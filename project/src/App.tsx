@@ -2,10 +2,14 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { CartProvider } from './context/CartContext';
+import { WishlistProvider } from './context/WishlistContext';
 import Auth from './pages/Auth';
 import Home from './pages/Home';
 import Explore from './pages/Explore';
 import ArtworkDetail from './pages/ArtworkDetail';
+import Upload from './pages/Upload';
+import Marketplace from './pages/Marketplace';
 import { AuthStatus } from './types';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,6 +53,18 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       } />
       
+      <Route path="/upload" element={
+        <ProtectedRoute>
+          <Upload />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/marketplace" element={
+        <ProtectedRoute>
+          <Marketplace />
+        </ProtectedRoute>
+      } />
+      
       <Route path="/artwork/:id" element={
         <ProtectedRoute>
           <ArtworkDetail />
@@ -66,7 +82,11 @@ function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <AppRoutes />
+          <CartProvider>
+            <WishlistProvider>
+              <AppRoutes />
+            </WishlistProvider>
+          </CartProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
