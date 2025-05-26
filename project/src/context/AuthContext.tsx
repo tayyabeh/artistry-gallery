@@ -40,8 +40,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userRes.data);
       setStatus(AuthStatus.AUTHENTICATED);
       return userRes.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login failed:', error);
+      // Extract and throw the error message from the response if available
+      if (error.response && error.response.data && error.response.data.message) {
+        throw new Error(error.response.data.message);
+      }
       throw new Error('Login failed. Please check your credentials.');
     }
   };
@@ -62,8 +66,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userRes.data);
       setStatus(AuthStatus.AUTHENTICATED);
       return userRes.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup failed:', error);
+      
+      // Extract and throw the error message from the response if available
+      if (error.response && error.response.data && error.response.data.message) {
+        throw new Error(error.response.data.message);
+      }
       throw new Error('Signup failed. Please try again with different credentials.');
     }
   };
@@ -81,10 +90,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = () => {
+// This is the problematic export - changing to a named function export instead
+export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}
