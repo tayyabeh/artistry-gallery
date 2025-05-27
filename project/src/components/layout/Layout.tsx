@@ -2,6 +2,8 @@ import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
+import MiniCart from '../cart/MiniCart';
+import WishlistPanel from '../wishlist/WishlistPanel';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -49,6 +51,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </motion.div>
         </AnimatePresence>
       </main>
+      
+      {/* Cart and Wishlist Panels */}
+      <MiniCart />
+      <WishlistPanel />
     </div>
   );
 };
