@@ -10,6 +10,8 @@ import Explore from './pages/Explore';
 import ArtworkDetail from './pages/ArtworkDetail';
 import Upload from './pages/Upload';
 import Marketplace from './pages/Marketplace';
+import Profile from './pages/Profile';
+import ProfileEdit from './components/profile/ProfileEdit';
 import { AuthStatus } from './types';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -68,6 +70,25 @@ const AppRoutes: React.FC = () => {
       <Route path="/artwork/:id" element={
         <ProtectedRoute>
           <ArtworkDetail />
+        </ProtectedRoute>
+      } />
+      
+      {/* Profile Routes */}
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <Profile />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/profile/edit" element={
+        <ProtectedRoute>
+          <ProfileEdit />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/profile/settings" element={
+        <ProtectedRoute>
+          <ProfileEdit />  {/* Temporarily using ProfileEdit, should be replaced with a dedicated Settings component */}
         </ProtectedRoute>
       } />
       

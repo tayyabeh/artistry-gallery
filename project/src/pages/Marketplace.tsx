@@ -102,14 +102,47 @@ const Marketplace: React.FC = () => {
   }, [marketplaceItems, searchTerm, selectedCategory, priceRange, sortOption]);
 
   const handleAddToCart = (item: MarketplaceItem) => {
-    addToCart(item);
+    // Convert MarketplaceItem to compatible Artwork format
+    const artworkItem: Artwork = {
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      image: item.image,
+      creator: item.creator,
+      likes: item.likes,
+      comments: item.comments || [],
+      tags: item.tags,
+      category: item.category,
+      createdAt: item.createdAt,
+      price: item.price,
+      isSoldOut: !item.inStock
+    };
+    
+    addToCart(artworkItem);
+    setShowCart(true);
   };
 
   const toggleWishlist = (item: MarketplaceItem) => {
+    // Convert MarketplaceItem to compatible Artwork format
+    const artworkItem: Artwork = {
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      image: item.image,
+      creator: item.creator,
+      likes: item.likes,
+      comments: item.comments || [],
+      tags: item.tags,
+      category: item.category,
+      createdAt: item.createdAt,
+      price: item.price,
+      isSoldOut: !item.inStock
+    };
+    
     if (isInWishlist(item.id)) {
       removeFromWishlist(item.id);
     } else {
-      addToWishlist(item);
+      addToWishlist(artworkItem);
     }
   };
 
