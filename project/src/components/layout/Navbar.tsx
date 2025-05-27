@@ -21,7 +21,7 @@ const Navbar: React.FC = () => {
     { name: 'Marketplace', path: '/marketplace', icon: <ShoppingCart size={20} /> },
     { name: 'Messages', path: '/messages', icon: <MessageCircle size={20} /> },
     { name: 'Profile', path: '/profile', icon: <User size={20} /> },
-    { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
+    { name: 'Settings', path: '/profile/settings', icon: <Settings size={20} /> },
   ];
 
   const toggleMenu = () => {
