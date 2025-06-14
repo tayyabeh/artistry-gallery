@@ -18,79 +18,30 @@ let inMemoryDb = {
 
 // MongoDB Connection
 const mongoUri = process.env.MONGODB_URI;
-let dbConnected = false;
 
-// Configure MongoDB connection options
-const mongooseOptions = {
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 30000, // Increased timeout to 30 seconds
-  socketTimeoutMS: 45000, // Increased socket timeout
-  family: 4, // Force IPv4
-  ssl: true,
-  // Remove these options if using newer MongoDB versions
-  // tls: true,
-  // tlsAllowInvalidCertificates: true,
-};
-
-// Function to attempt MongoDB connection
-const connectToMongoDB = async (uri, options, retryCount = 0) => {
-  try {
-    console.log(`Attempting to connect to MongoDB (Attempt ${retryCount + 1})...`);
-    await mongoose.connect(uri, options);
-    console.log('✅ Connected to MongoDB successfully!');
-    dbConnected = true;
-    return true;
-  } catch (error) {
-    console.error('❌ MongoDB connection error:', error.message);
-    
-    // If this was the primary connection attempt, try the fallback
-    if (retryCount === 0 && process.env.MONGODB_FALLBACK_URI) {
-      console.log('Attempting to connect to fallback MongoDB...');
-      try {
-        await mongoose.connect(process.env.MONGODB_FALLBACK_URI, options);
-        console.log('✅ Connected to fallback MongoDB successfully!');
-        dbConnected = true;
-        return true;
-      } catch (fallbackError) {
-        console.error('❌ Fallback MongoDB connection error:', fallbackError.message);
-      }
-    }
-    
-    // If we've tried less than 3 times, retry the connection
-    if (retryCount < 2) {
-      console.log(`Retrying connection in 3 seconds... (${retryCount + 1}/3)`);
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      return connectToMongoDB(uri, options, retryCount + 1);
-    }
-    
-    console.log('🔄 All MongoDB connection attempts failed. Starting with in-memory database fallback.');
-    return false;
-  }
-};
-
-// Start connection process
-if (!mongoUri) {
-  console.error('MongoDB URI not found in environment variables');
-  console.log('Starting server with in-memory database only');
-} else {
-  // Remove TLS options from URI if they're in connection options
-  const cleanUri = mongoUri.split('&').filter(param => 
-    !param.startsWith('tls=') && 
-    !param.startsWith('tlsAllowInvalidCertificates=')
-  ).join('&');
+  useUnifiedTopology: true
+})
+.then(() => console.log('Connected to MongoDB Atlas'))
+.catch(err => {
+  console.error('MongoDB connection error:', err);
   
-  connectToMongoDB(cleanUri, mongooseOptions).then(() => {
-    // Connection attempt handled in the function
+  // Try fallback connection
+  console.log('Attempting fallback MongoDB connection...');
+  mongoose.connect(process.env.MONGODB_FALLBACK_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  })
+  .then(() => console.log('Connected to fallback MongoDB'))
+  .catch(fallbackErr => {
+    console.error('Fallback MongoDB connection failed:', fallbackErr);
+    process.exit(1);
   });
-}
+});
 
 // In-memory database fallback middleware
 app.use((req, res, next) => {
-  if (dbConnected) {
-    return next();
-  }
-  
   // Add in-memory database to request object
   req.inMemoryDb = inMemoryDb;
   
@@ -130,11 +81,13 @@ app.use((req, res, next) => {
   next();
 });
 
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'ok',
-    dbConnected,
     timestamp: new Date().toISOString()
   });
 });
