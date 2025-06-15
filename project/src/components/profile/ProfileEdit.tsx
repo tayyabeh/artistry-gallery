@@ -3,18 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Camera, X, Save, Upload, Trash, Facebook, 
-  Twitter, Instagram, Globe, AlertCircle
+  Twitter, Instagram, Globe, AlertCircle, 
+  User, Bell, BellOff, Lock, Mail
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Layout from '../layout/Layout';
-import { mockUserData } from '../../data/mockData';
+// import { mockUserData } from '../../data/mockData';
+import { authAPI } from '../../services/api';
 
 const ProfileEdit: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   
-  // Use mock data for demonstration
-  const currentUser = user || mockUserData[0];
+  if (!user) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64 text-slate-500">Loading...</div>
+      </Layout>
+    );
+  }
+
+  const currentUser = user;
   
   const [formData, setFormData] = useState({
     displayName: currentUser.displayName || currentUser.username,
@@ -124,12 +133,27 @@ const ProfileEdit: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (validateForm()) {
-      // In a real app, this would send data to the server
-      console.log('Form submitted:', formData);
+      try {
+        await authAPI.updateProfile({
+          displayName: formData.displayName,
+          username: formData.username,
+          bio: formData.bio,
+          location: formData.location,
+          socialLinks: formData.socialLinks,
+          avatar: formData.profileImage,
+          coverImage: formData.coverImage
+        });
+        // On success navigate back
+        await refreshUser();
+        navigate('/profile');
+      } catch (err) {
+        console.error('Profile update failed', err);
+        alert('Failed to update profile');
+      }
       
       // Update profile image if changed
       if (profileImagePreview) {

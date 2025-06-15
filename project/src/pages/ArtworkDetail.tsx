@@ -1,16 +1,74 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Layout from '../components/layout/Layout';
-import { mockArtworkData, mockCommentData } from '../data/mockData';
+import { mockCommentData } from '../data/mockData';
+import { artworkAPI } from '../services/api';
 import { Artwork, Comment } from '../types';
 import { 
   Heart, MessageCircle, Download, Share2, Pencil, 
-  Clock, Tag, User, ArrowLeft 
+  Clock, Tag, User, ArrowLeft, AlertCircle, Home as HomeIcon, RefreshCw
 } from 'lucide-react';
 import ArtworkGrid from '../components/artwork/ArtworkGrid';
 
+// Error boundary component to catch rendering errors
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error in ArtworkDetail:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+          <div className="max-w-md w-full space-y-4 text-center">
+            <AlertCircle className="h-16 w-16 mx-auto text-red-500" />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Something went wrong</h2>
+            <p className="text-gray-600 dark:text-gray-300">
+              We couldn't load the artwork details. Please try again later.
+            </p>
+            <div className="flex justify-center space-x-4 mt-6">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center space-x-2"
+              >
+                <RefreshCw size={16} />
+                <span>Try Again</span>
+              </button>
+              <Link
+                to="/"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 flex items-center space-x-2"
+              >
+                <HomeIcon size={16} />
+                <span>Go Home</span>
+              </Link>
+            </div>
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-md text-left text-sm text-red-700 dark:text-red-300">
+                <p className="font-mono">{this.state.error?.toString()}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const ArtworkDetail: React.FC = () => {
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
   const { id } = useParams<{ id: string }>();
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,25 +78,108 @@ const ArtworkDetail: React.FC = () => {
   const [liked, setLiked] = useState(false);
 
   useEffect(() => {
-    // In a real app, this would be an API call
-    setTimeout(() => {
-      const foundArtwork = mockArtworkData.find(art => art.id === id);
-      if (foundArtwork) {
-        setArtwork(foundArtwork);
-        setLiked(foundArtwork.isFavorited || false);
-        
-        // Find related artworks (same category or tags)
-        const relatedWorks = mockArtworkData.filter(art => 
-          art.id !== id && 
-          (art.category === foundArtwork.category || 
-           art.tags.some(tag => foundArtwork.tags.includes(tag)))
-        ).slice(0, 4);
-        
-        setRelated(relatedWorks);
-        setComments(mockCommentData);
+    const fetchData = async () => {
+      if (!id) {
+        console.error('No artwork ID provided');
+        return;
       }
-      setIsLoading(false);
-    }, 500);
+
+      if (!id) {
+        setError('No artwork ID provided');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        console.log('Fetching artwork with ID:', id);
+        
+        // First, try to get the specific artwork
+        const res = await artworkAPI.getArtworkById(id);
+        console.log('Artwork API response:', res);
+        
+        if (!res.data) {
+          const errorMsg = 'No data in response from server';
+          console.error(errorMsg, res);
+          setError(errorMsg);
+          return;
+        }
+        
+        if (!res.data.success) {
+          const errorMsg = res.data.message || 'Failed to load artwork';
+          console.error('API error:', errorMsg);
+          setError(errorMsg);
+          return;
+        }
+        
+        if (!res.data.data) {
+          const errorMsg = 'Artwork not found';
+          console.error(errorMsg, res.data);
+          setError(errorMsg);
+          return;
+        }
+
+        // Extract artwork from response data
+        const responseData = res.data.data;
+        
+        // Ensure we have a valid ID
+        const art = { ...responseData, id: responseData._id || responseData.id };
+        if (!art.id) {
+          console.error('No ID found in artwork data:', art);
+          return;
+        }
+
+        console.log('Setting artwork data:', art);
+        setArtwork(art);
+        setLiked(art.isFavorited || false);
+
+        // Then fetch all artworks for related items
+        try {
+          console.log('Fetching all artworks for related items');
+          const allRes = await artworkAPI.getAllArtworks();
+          
+          // Handle the response structure from backend
+          const artworks = Array.isArray(allRes.data?.data || allRes.data) 
+            ? (allRes.data.data || allRes.data).map((a: any) => ({
+                ...a,
+                id: a._id || a.id
+              }))
+            : [];
+          
+          console.log(`Found ${artworks.length} total artworks`);
+          
+          const relatedItems = artworks.filter((a: any) => 
+            a.category === art.category && 
+            a.id !== art.id &&
+            a.id // Ensure we have valid IDs
+          );
+          
+          console.log(`Found ${relatedItems.length} related artworks`);
+          setRelated(relatedItems);
+        } catch (relatedError) {
+          console.error('Error fetching related artworks:', relatedError);
+          setRelated([]);
+        }
+
+        // TODO: replace mock comments once backend endpoint available
+        setComments(mockCommentData);
+      } catch (err: any) {
+        const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch artwork';
+        console.error('Failed to fetch artwork:', {
+          error: err,
+          message: errorMsg,
+          response: err.response?.data,
+          status: err.response?.status,
+          id
+        });
+        setError(errorMsg);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
   }, [id]);
 
   const handleLike = () => {
@@ -73,6 +214,33 @@ const ArtworkDetail: React.FC = () => {
       <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="max-w-2xl mx-auto p-6 text-center">
+          <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded-lg mb-6">
+            <div className="flex items-center justify-center space-x-2">
+              <AlertCircle className="h-5 w-5" />
+              <span>{error}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(-1)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-2"
+          >
+            Go Back
+          </button>
+          <Link
+            to="/"
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+          >
+            Go Home
+          </Link>
         </div>
       </Layout>
     );
@@ -192,26 +360,48 @@ const ArtworkDetail: React.FC = () => {
               </form>
               
               <div className="space-y-4">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="card p-4">
-                    <div className="flex items-start">
-                      <img 
-                        src={comment.user.avatar} 
-                        alt={comment.user.username} 
-                        className="w-10 h-10 rounded-full mr-3"
-                      />
-                      <div>
-                        <div className="flex items-center">
-                          <h4 className="font-medium">{comment.user.username}</h4>
-                          <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
-                            {formatDate(comment.createdAt)}
-                          </span>
+                {comments && comments.length > 0 ? (
+                  comments.map((comment) => {
+                    // Ensure comment and its properties exist
+                    const commentUser = comment?.user || {};
+                    const username = commentUser?.username || 'Unknown User';
+                    const avatar = commentUser?.avatar || 'https://via.placeholder.com/40';
+                    const content = comment?.content || '';
+                    const commentDate = comment?.createdAt ? new Date(comment.createdAt) : new Date();
+                    
+                    return (
+                      <div key={comment.id || Math.random().toString(36).substr(2, 9)} className="card p-4">
+                        <div className="flex items-start">
+                          <img 
+                            src={avatar}
+                            alt={username}
+                            className="w-10 h-10 rounded-full mr-3 object-cover"
+                            onError={(e) => {
+                              // Fallback to placeholder if image fails to load
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://via.placeholder.com/40';
+                            }}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center">
+                              <h4 className="font-medium">{username}</h4>
+                              <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                                {formatDate(commentDate.toString())}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-slate-700 dark:text-slate-300 break-words">
+                              {content}
+                            </p>
+                          </div>
                         </div>
-                        <p className="mt-1 text-slate-700 dark:text-slate-300">{comment.content}</p>
                       </div>
-                    </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-4 text-slate-500 dark:text-slate-400">
+                    No comments yet. Be the first to comment!
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -236,7 +426,7 @@ const ArtworkDetail: React.FC = () => {
                       {artwork.creator.username}
                     </Link>
                     <div className="text-sm text-slate-500 dark:text-slate-400">
-                      {artwork.creator.followers.toLocaleString()} followers
+                      {(artwork.creator.followers || 0).toLocaleString()} followers
                     </div>
                   </div>
                 </div>
@@ -276,21 +466,27 @@ const ArtworkDetail: React.FC = () => {
               <div className="card p-6">
                 <h3 className="mb-4">More from this artist</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  {mockArtworkData
-                    .filter(art => art.creator.id === artwork.creator.id && art.id !== artwork.id)
-                    .slice(0, 4)
-                    .map(art => (
+                  {related.length > 0 ? (
+                    related.slice(0, 4).map((art) => (
                       <Link key={art.id} to={`/artwork/${art.id}`}>
                         <div className="rounded-lg overflow-hidden hover:opacity-90 transition-opacity">
                           <img 
                             src={art.image} 
                             alt={art.title} 
                             className="w-full h-auto aspect-square object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://via.placeholder.com/300';
+                            }}
                           />
                         </div>
                       </Link>
                     ))
-                  }
+                  ) : (
+                    <div className="col-span-2 text-center text-slate-500 dark:text-slate-400 py-4">
+                      No other artworks found from this artist
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -309,4 +505,11 @@ const ArtworkDetail: React.FC = () => {
   );
 };
 
-export default ArtworkDetail;
+// Wrap the component with ErrorBoundary
+export default function ArtworkDetailWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <ArtworkDetail />
+    </ErrorBoundary>
+  );
+}
