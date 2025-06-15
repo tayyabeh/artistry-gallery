@@ -12,9 +12,10 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { signup } = useAuth();
+  const { signup, logout } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +32,10 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
     try {
       // Pass username as displayName as well
       await signup(email, username, password, username);
+      // Immediately log out to prevent auto-redirect to protected routes
+      logout();
       console.log('Signup successful');
+      setSuccess(true);
     } catch (err: any) {
       console.error('Detailed signup error:', err);
       // Show more specific error message if available
@@ -49,7 +53,21 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
       transition={{ duration: 0.3 }}
       className="w-full max-w-md"
     >
-      <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
+      {success ? (
+        <>
+          <h2 className="text-2xl font-bold mb-6 text-center">Account Created!</h2>
+          <p className="mb-6 text-center">Your account has been created successfully. You can now sign in.</p>
+          <button
+            type="button"
+            onClick={onSwitchToLogin}
+            className="btn-primary w-full flex justify-center"
+          >
+            Go to Sign In
+          </button>
+        </>
+      ) : (
+        <> 
+          <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
       
       {error && (
         <div className="mb-4 p-3 bg-error-50 text-error-700 rounded-lg">
@@ -158,6 +176,8 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           </p>
         </div>
       </form>
+        </>
+      )}
     </motion.div>
   );
 };
