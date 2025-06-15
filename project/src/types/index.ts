@@ -1,11 +1,25 @@
+export interface SocialLinks {
+  twitter?: string;
+  instagram?: string;
+  facebook?: string;
+  website?: string;
+}
+
 export interface User {
   id: string;
   username: string;
   email: string;
-  avatar: string;
+  phone?: string;
+  displayName?: string;
+  avatar?: string;
+  coverImage?: string;
   bio?: string;
-  following: number;
-  followers: number;
+  location?: string;
+  socialLinks?: SocialLinks;
+  following?: number;
+  followers?: number;
+  views?: number;
+  downloads?: number;
   createdAt: string;
 }
 
@@ -51,6 +65,7 @@ export interface AuthContextType {
     autoLogin?: boolean
   ) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 export interface MarketplaceItem extends Artwork {

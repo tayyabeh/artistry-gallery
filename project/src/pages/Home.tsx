@@ -29,7 +29,7 @@ const Home: React.FC = () => {
     try {
       setLoading(true);
       const response = await artworkAPI.getAllArtworks();
-      const allArtworks = response.data;
+      const allArtworks = response.data.map((art: any) => ({ ...art, id: art._id || art.id }));
       
       // Set a featured artwork (typically this would come from the backend)
       if (allArtworks.length > 0) {

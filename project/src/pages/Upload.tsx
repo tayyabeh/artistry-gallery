@@ -3,6 +3,9 @@ import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { Upload as UploadIcon, X, Image as ImageIcon, Sparkles, LinkIcon, Globe, Lock, User, Users, Clock, Palette, Wand2, TextCursorInput } from 'lucide-react';
 import Layout from '../components/layout/Layout';
+import { artworkAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { artCategories } from '../data/mockData';
 
 enum UploadMode {
@@ -17,6 +20,8 @@ enum Visibility {
 }
 
 const Upload: React.FC = () => {
+  const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
   // Upload states
   const [uploadMode, setUploadMode] = useState<UploadMode>(UploadMode.FILE);
   const [files, setFiles] = useState<File[]>([]);
@@ -38,6 +43,7 @@ const Upload: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedGeneratedImage, setSelectedGeneratedImage] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -120,7 +126,53 @@ const Upload: React.FC = () => {
     }, 2000);
   };
 
-  const selectGeneratedImage = (index: number) => {
+  const handleCreatePin = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+            let payload: Record<string, any>;
+
+      if (uploadMode === UploadMode.FILE && files.length) {
+        // convert file to base64 string
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(files[0]);
+        });
+        payload = { image: fileBase64 };
+      } else if (uploadMode === UploadMode.AI && selectedGeneratedImage !== null) {
+        payload = { image: generatedImages[selectedGeneratedImage] };
+      } else {
+        alert('Please select an image first');
+        return;
+      }
+
+      payload = {
+        ...payload,
+        title,
+        description,
+        category,
+        tags,
+        visibility
+      };
+
+      await artworkAPI.createArtwork(payload);
+      await refreshUser();
+      navigate('/profile');
+    } catch (err) {
+      console.error('Failed to upload artwork', err);
+      const msg = (err as any)?.response?.data?.message || 'Failed to upload artwork';
+      alert(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+const selectGeneratedImage = (index: number) => {
     setSelectedGeneratedImage(index);
     setPreviewUrl(generatedImages[index]);
   };
@@ -477,10 +529,12 @@ const Upload: React.FC = () => {
                   </div>
                   
                   <button
-                    className="btn-primary w-full mt-8"
-                    disabled={(!files.length && !previewUrl) || !title.trim() || !category}
+                    type="button"
+                    onClick={handleCreatePin}
+                    className="btn-primary w-full mt-8 disabled:opacity-50"
+                    disabled={isSubmitting || ((!files.length && uploadMode===UploadMode.FILE) && !previewUrl) || !title.trim() || !category}
                   >
-                    Create Pin
+                    {isSubmitting ? 'Uploading...' : 'Create Pin'}
                   </button>
                 </div>
               </div>
