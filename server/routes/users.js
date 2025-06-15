@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { uploadSingle } = require('../utils/fileUpload.js');
 
 // Register a new user
 router.post('/register', async (req, res) => {
@@ -117,7 +120,16 @@ router.get('/me', auth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json(user);
+    
+    // Convert to plain object to modify
+    const userObj = user.toObject();
+    
+    // If user has an avatar, include the full URL
+    if (userObj.avatar) {
+      userObj.avatar = `${req.protocol}://${req.get('host')}${user.avatar}`;
+    }
+    
+    res.json(userObj);
   } catch (error) {
     console.error(error.message);
     res.status(500).send('Server error');
@@ -136,6 +148,175 @@ router.put('/me', auth, async (req, res) => {
   } catch (error) {
     console.error(error.message);
     res.status(500).send('Server error');
+  }
+});
+
+// Upload profile photo
+router.post('/me/avatar', auth, uploadSingle('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      // Delete the uploaded file if user not found
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete old profile photo if it exists and is not the default
+    if (user.avatar && !user.avatar.includes('default-avatar')) {
+      const oldAvatarPath = path.join(__dirname, '../../public', user.avatar);
+      if (fs.existsSync(oldAvatarPath)) {
+        fs.unlinkSync(oldAvatarPath);
+      }
+    }
+
+    // Update user with new avatar path
+    const avatarPath = '/uploads/' + path.basename(req.file.path);
+    user.avatar = avatarPath;
+    await user.save();
+
+    // Return the full URL for the avatar
+    const fullUrl = `${req.protocol}://${req.get('host')}${avatarPath}`;
+    res.json({ avatar: fullUrl });
+  } catch (error) {
+    console.error('Error uploading profile photo:', error);
+    // Clean up the uploaded file in case of error
+    if (req.file && req.file.path) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: 'Error uploading profile photo' });
+  }
+});
+
+// Upload cover photo
+router.post('/me/cover', auth, uploadSingle('cover'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      // Delete the uploaded file if user not found
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete old cover photo if it exists
+    if (user.cover) {
+      const oldCoverPath = path.join(__dirname, '../../public', user.cover);
+      if (fs.existsSync(oldCoverPath)) {
+        fs.unlinkSync(oldCoverPath);
+      }
+    }
+
+    // Update user with new cover path
+    const coverPath = '/uploads/' + path.basename(req.file.path);
+    user.cover = coverPath;
+    await user.save();
+
+    // Return the full URL for the cover
+    const fullUrl = `${req.protocol}://${req.get('host')}${coverPath}`;
+    res.json({ cover: fullUrl });
+  } catch (error) {
+    console.error('Error uploading cover photo:', error);
+    // Clean up the uploaded file in case of error
+    if (req.file && req.file.path) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: 'Error uploading cover photo' });
+  }
+});
+
+// Upload cover photo
+router.post('/me/cover', auth, uploadSingle('cover'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      // Delete the uploaded file if user not found
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete old cover photo if it exists
+    if (user.coverImage) {
+      const oldCoverPath = path.join(__dirname, '../../public', user.coverImage);
+      if (fs.existsSync(oldCoverPath)) {
+        fs.unlinkSync(oldCoverPath);
+      }
+    }
+
+    // Update user with new cover image path
+    const coverPath = '/uploads/' + path.basename(req.file.path);
+    user.coverImage = coverPath;
+    await user.save();
+
+    res.json({ coverImage: coverPath });
+  } catch (error) {
+    console.error('Error uploading cover photo:', error);
+    // Clean up the uploaded file in case of error
+    if (req.file && req.file.path) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: 'Error uploading cover photo' });
+  }
+});
+
+// Delete profile photo
+router.delete('/me/avatar', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Don't delete default avatar
+    if (user.avatar && !user.avatar.includes('default-avatar')) {
+      const avatarPath = path.join(__dirname, '../../public', user.avatar);
+      if (fs.existsSync(avatarPath)) {
+        fs.unlinkSync(avatarPath);
+      }
+    }
+
+    user.avatar = '/images/default-avatar.png';
+    await user.save();
+
+    res.json({ avatar: user.avatar });
+  } catch (error) {
+    console.error('Error deleting profile photo:', error);
+    res.status(500).json({ message: 'Error deleting profile photo' });
+  }
+});
+
+// Delete cover photo
+router.delete('/me/cover', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.coverImage) {
+      const coverPath = path.join(__dirname, '../../public', user.coverImage);
+      if (fs.existsSync(coverPath)) {
+        fs.unlinkSync(coverPath);
+      }
+    }
+
+    user.coverImage = '';
+    await user.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting cover photo:', error);
+    res.status(500).json({ message: 'Error deleting cover photo' });
   }
 });
 

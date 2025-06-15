@@ -18,14 +18,48 @@ router.get('/', async (req, res) => {
 
 // Get a single artwork
 router.get('/:id', async (req, res) => {
+  const { id } = req.params;
+  console.log('Fetching artwork with ID:', id);
+  
+  // Validate ID format (MongoDB ObjectId is 24 hex characters)
+  if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
+    console.error('Invalid artwork ID format:', id);
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Invalid artwork ID format' 
+    });
+  }
+
   try {
-    const artwork = await Artwork.findById(req.params.id)
+    const artwork = await Artwork.findById(id)
       .populate('creator', 'displayName profileImage')
       .populate('comments', 'content likes createdAt');
-    if (!artwork) return res.status(404).json({ message: 'Artwork not found' });
-    res.json(artwork);
+      
+    if (!artwork) {
+      console.error('Artwork not found with ID:', id);
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Artwork not found',
+        id: id
+      });
+    }
+    
+    console.log('Successfully found artwork:', artwork._id);
+    res.json({
+      success: true,
+      data: artwork
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching artwork:', {
+      error: error.message,
+      id: id,
+      stack: error.stack
+    });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while fetching artwork',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

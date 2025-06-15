@@ -26,13 +26,43 @@ api.interceptors.request.use(
 export const authAPI = {
   register: (userData: any) => api.post('/users/register', userData),
   login: (credentials: any) => api.post('/users/login', credentials),
-  getCurrentUser: () => api.get('/users/me')
+  getCurrentUser: () => api.get('/users/me'),
+  updateProfile: (data: any) => api.put('/users/me', data),
+  uploadAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return api.post('/users/me/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  uploadCover: (file: File) => {
+    const formData = new FormData();
+    formData.append('cover', file);
+    return api.post('/users/me/cover', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  deleteAvatar: () => api.delete('/users/me/avatar'),
+  deleteCover: () => api.delete('/users/me/cover')
 };
 
 export const artworkAPI = {
   getAllArtworks: () => api.get('/artworks'),
   getArtworkById: (id: string) => api.get(`/artworks/${id}`),
-  createArtwork: (artworkData: any) => api.post('/artworks', artworkData),
+  createArtwork: (artworkData: any) => {
+    if (artworkData instanceof FormData) {
+      return api.post('/artworks', artworkData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    }
+    return api.post('/artworks', artworkData);
+  },
   updateArtwork: (id: string, artworkData: any) => api.put(`/artworks/${id}`, artworkData),
   deleteArtwork: (id: string) => api.delete(`/artworks/${id}`)
 };

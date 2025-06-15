@@ -1,38 +1,179 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Layout from '../components/layout/Layout';
 import ArtworkGrid from '../components/artwork/ArtworkGrid';
-import { mockUserData, mockArtworkData } from '../data/mockData';
+import CoverPhotoUpload from '../components/profile/CoverPhotoUpload';
+// import { mockUserData, mockArtworkData } from '../data/mockData';
 import { 
-  Heart, MessageCircle, Download, Users, Edit, Settings, 
-  BarChart2, ShoppingBag, Clock, ChevronRight, Pencil,
-  Facebook, Twitter, Instagram, Globe, CreditCard, Bell,
-  Copy, CheckCircle, Link, UserPlus, User, Share2
+  Heart, Download, Users, Edit, Settings, 
+  ShoppingBag, Clock, Pencil,
+  Facebook, Twitter, Instagram, Globe, Bell,
+  CheckCircle, User, Share2
 } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
+import { artworkAPI } from '../services/api';
+import { Artwork } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
+import ProfilePhotoUpload from '../components/profile/ProfilePhotoUpload';
 
 const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState('artwork');
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
   
-  // Use mock data for demonstration
-  const currentUser = user || mockUserData[0];
+  const handleProfilePhotoChange = async (file: File | null) => {
+    if (!file) {
+      // Handle photo removal
+      try {
+        setIsUploading(true);
+        setUploadError(null);
+        await authAPI.deleteAvatar();
+        // Refresh user data to get the latest state
+        await refreshUser();
+      } catch (error) {
+        console.error('Failed to remove profile photo:', error);
+        setUploadError('Failed to remove profile photo');
+      } finally {
+        setIsUploading(false);
+      }
+      return;
+    }
+
+    // Handle new photo upload
+    try {
+      setIsUploading(true);
+      setUploadError(null);
+      
+      console.log('Uploading file:', file.name, file.type, file.size);
+      
+      // Upload the avatar and refresh user data
+      const response = await authAPI.uploadAvatar(file);
+      console.log('Upload response:', response);
+      
+      await refreshUser();
+      
+    } catch (error: any) {
+      console.error('Failed to upload profile photo:', error);
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+        setUploadError(`Upload failed: ${error.response.data?.message || 'Unknown error'}`);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received:', error.request);
+        setUploadError('No response from server. Please check your connection.');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error setting up request:', error.message);
+        setUploadError(`Upload failed: ${error.message}`);
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
   
-  const userArtworks = mockArtworkData.filter(art => art.creator.id === currentUser.id);
-  const favoriteArtworks = mockArtworkData.filter(art => art.isFavorited);
+  // Handle cover photo upload
+  const handleCoverPhotoChange = async (file: File | null) => {
+    if (!file) {
+      // Handle cover photo removal
+      try {
+        setIsUploadingCover(true);
+        setCoverUploadError(null);
+        await authAPI.deleteCover();
+        await refreshUser();
+      } catch (error) {
+        console.error('Failed to remove cover photo:', error);
+        setCoverUploadError('Failed to remove cover photo');
+      } finally {
+        setIsUploadingCover(false);
+      }
+      return;
+    }
+
+    // Handle new cover photo upload
+    try {
+      setIsUploadingCover(true);
+      setCoverUploadError(null);
+      
+      console.log('Uploading cover file:', file.name, file.type, file.size);
+      
+      // Upload the cover and refresh user data
+      const response = await authAPI.uploadCover(file);
+      console.log('Cover upload response:', response);
+      
+      await refreshUser();
+      
+    } catch (error: any) {
+      console.error('Failed to upload cover photo:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        setCoverUploadError(`Upload failed: ${error.response.data?.message || 'Unknown error'}`);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+        setCoverUploadError('No response from server. Please check your connection.');
+      } else {
+        console.error('Error setting up request:', error.message);
+        setCoverUploadError(`Upload failed: ${error.message}`);
+      }
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
   
-  // Mock followers/following data
-  const followersCount = 2457;
-  const followingCount = 183;
+  if (!user) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <span className="text-slate-500">Loading profile...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  const currentUser = user;
   
-  // Mock stats
+  const [userArtworks, setUserArtworks] = useState<Artwork[]>([]);
+  const [favoriteArtworks] = useState<Artwork[]>([]);
+  
+  // Fetch artworks created by the current user
+  useEffect(() => {
+    const fetchUserArtworks = async () => {
+      try {
+        const res = await artworkAPI.getAllArtworks();
+        const all: Artwork[] = res.data;
+        // Match artworks where creator matches current user id or is an object containing that id
+        const mine = all.filter((art: any) => {
+          if (!art.creator) return false;
+          if (typeof art.creator === 'string') return art.creator === currentUser.id;
+          return art.creator === currentUser.id || art.creator._id === currentUser.id || art.creator.id === currentUser.id;
+        });
+        setUserArtworks(mine);
+      } catch (err) {
+        console.error('Failed to load user artworks', err);
+      }
+    };
+    fetchUserArtworks();
+  }, [currentUser.id]);
+  
+  // Followers/Following counts from user data (fallback to 0)
+  const followersCount = currentUser.followers ?? 0;
+  const followingCount = currentUser.following ?? 0;
+  
+  // Stats – replace placeholder numbers with user data when available
   const stats = [
     { label: 'Artworks', value: userArtworks.length, icon: ShoppingBag },
-    { label: 'Likes', value: userArtworks.reduce((sum, art) => sum + art.likes, 0), icon: Heart },
-    { label: 'Views', value: 48392, icon: Clock },
-    { label: 'Downloads', value: 1258, icon: Download },
+    { label: 'Likes', value: userArtworks.reduce((sum, art) => sum + (art.likes ?? 0), 0), icon: Heart },
+    { label: 'Views', value: currentUser.views ?? 0, icon: Clock },
+    { label: 'Downloads', value: currentUser.downloads ?? 0, icon: Download },
   ];
   
   // For shareable link functionality
@@ -52,29 +193,44 @@ const Profile: React.FC = () => {
       >
         {/* Profile Header */}
         <div className="relative">
-          <div className="h-64 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl overflow-hidden">
-            {currentUser.coverImage && (
-              <img 
-                src={currentUser.coverImage} 
-                alt="Cover" 
-                className="w-full h-full object-cover opacity-60"
-              />
+          <div className="relative h-64 rounded-xl overflow-hidden">
+            <CoverPhotoUpload 
+              currentImage={currentUser.coverImage || ''}
+              onImageChange={handleCoverPhotoChange}
+              disabled={isUploadingCover}
+              className="h-full w-full"
+            />
+            {isUploadingCover && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+              </div>
             )}
-            <button className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-full p-2 transition-colors">
-              <Edit size={16} />
-            </button>
+            {coverUploadError && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm">
+                {coverUploadError}
+              </div>
+            )}
           </div>
           
           <div className="absolute -bottom-16 left-8 flex items-end">
             <div className="relative">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.username}
-                className="w-32 h-32 rounded-full border-4 border-white dark:border-slate-800 object-cover"
+              <ProfilePhotoUpload
+                currentImage={currentUser.avatar}
+                onImageChange={handleProfilePhotoChange}
+                size="md"
+                className="border-4 border-white dark:border-slate-800"
+                disabled={isUploading}
               />
-              <button className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-2 transition-colors">
-                <Pencil size={14} />
-              </button>
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+                </div>
+              )}
+              {uploadError && (
+                <div className="absolute -bottom-6 left-0 right-0 text-xs text-red-500 text-center">
+                  {uploadError}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userRes = await authAPI.getCurrentUser();
       setUser(userRes.data);
       setStatus(AuthStatus.AUTHENTICATED);
-      return userRes.data;
+      
     } catch (error: any) {
       console.error('Login failed:', error);
       // Extract and throw the error message from the response if available
@@ -50,7 +50,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, username: string, password: string, displayName: string) => {
+  const signup = async (
+    email: string,
+    username: string,
+    password: string,
+    displayName?: string,
+    autoLogin: boolean = true
+  ) => {
     try {
       const res = await authAPI.register({
         email,
@@ -65,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userRes = await authAPI.getCurrentUser();
       setUser(userRes.data);
       setStatus(AuthStatus.AUTHENTICATED);
-      return userRes.data;
+      
     } catch (error: any) {
       console.error('Signup failed:', error);
       
@@ -77,6 +83,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const res = await authAPI.getCurrentUser();
+      setUser(res.data);
+    } catch (err) {
+      console.error('Failed to refresh user', err);
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setStatus(AuthStatus.UNAUTHENTICATED);
@@ -84,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, status, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, status, login, signup, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
