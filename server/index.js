@@ -9,6 +9,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Flag to track if MongoDB connected successfully
+let mongoConnected = false;
+
 // In-memory database fallback for when MongoDB is unavailable
 let inMemoryDb = {
   users: [],
@@ -23,7 +26,10 @@ mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
-.then(() => console.log('Connected to MongoDB Atlas'))
+.then(() => {
+  mongoConnected = true;
+  console.log('Connected to MongoDB Atlas');
+})
 .catch(err => {
   console.error('MongoDB connection error:', err);
   
@@ -41,7 +47,11 @@ mongoose.connect(mongoUri, {
 });
 
 // In-memory database fallback middleware
+// Fallback mock handlers are only active when we are NOT connected to MongoDB
 app.use((req, res, next) => {
+  if (mongoConnected) {
+    return next(); // real DB is up – skip mocks
+  }
   // Add in-memory database to request object
   req.inMemoryDb = inMemoryDb;
   

@@ -43,7 +43,13 @@ export interface AuthContextType {
   user: User | null;
   status: AuthStatus;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, username: string, password: string) => Promise<void>;
+  signup: (
+    email: string,
+    username: string,
+    password: string,
+    displayName?: string,
+    autoLogin?: boolean
+  ) => Promise<void>;
   logout: () => void;
 }
 

@@ -12,6 +12,7 @@ import Upload from './pages/Upload';
 import Marketplace from './pages/Marketplace';
 import Profile from './pages/Profile';
 import ProfileEdit from './components/profile/ProfileEdit';
+import Message from './pages/Message';
 import { AuthStatus } from './types';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -64,6 +65,12 @@ const AppRoutes: React.FC = () => {
       <Route path="/marketplace" element={
         <ProtectedRoute>
           <Marketplace />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/messages" element={
+        <ProtectedRoute>
+          <Message />
         </ProtectedRoute>
       } />
       
