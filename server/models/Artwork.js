@@ -3,32 +3,55 @@ const mongoose = require('mongoose');
 const artworkSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true
+    required: [true, 'Title is required'],
+    trim: true,
+    maxlength: [100, 'Title cannot exceed 100 characters']
   },
   image: {
     type: String,
-    required: true
+    required: [true, 'Image URL is required']
   },
+  thumbnail: String,
   creator: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: [true, 'Creator reference is required']
   },
-  description: String,
+  description: {
+    type: String,
+    maxlength: [500, 'Description cannot exceed 500 characters']
+  },
   tags: [{
-    type: String
+    type: String,
+    trim: true
   }],
   category: {
-    type: String,
-    required: true
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    required: [true, 'Category reference is required']
+  },
+  price: {
+    type: Number,
+    min: [0, 'Price cannot be negative'],
+    required: [true, 'Price is required']
+  },
+  isDigital: {
+    type: Boolean,
+    default: true
+  },
+  dimensions: {
+    width: Number,
+    height: Number
   },
   likes: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   views: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   comments: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -36,17 +59,22 @@ const artworkSchema = new mongoose.Schema({
   }],
   downloads: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  isFeatured: {
+    type: Boolean,
+    default: false
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  isAvailable: {
+    type: Boolean,
+    default: true
+  },
+  licenseType: {
+    type: String,
+    enum: ['standard', 'extended', 'exclusive'],
+    default: 'standard'
   }
-});
+}, { timestamps: true });
 
-const Artwork = mongoose.model('Artwork', artworkSchema);
-module.exports = Artwork;
+module.exports = mongoose.model('Artwork', artworkSchema);

@@ -1,120 +1,299 @@
 const express = require('express');
 const router = express.Router();
 const Artwork = require('../models/Artwork');
+const Category = require('../models/Category');
 const auth = require('../middleware/auth');
+const { check, validationResult } = require('express-validator');
 
-// Get all artworks
+// @route   GET /api/artworks
+// @desc    Get all artworks with optional filtering
+// @access  Public
 router.get('/', async (req, res) => {
   try {
-    const artworks = await Artwork.find()
-      .populate('creator', 'displayName profileImage')
-      .populate('comments', 'content likes createdAt')
-      .sort({ createdAt: -1 });
-    res.json(artworks);
+    const { category, featured, search, sort } = req.query;
+    
+    // Build query object
+    const query = {};
+    
+    if (category) {
+      const categoryDoc = await Category.findOne({ slug: category });
+      if (categoryDoc) query.category = categoryDoc._id;
+    }
+    
+    if (featured === 'true') query.isFeatured = true;
+    
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { tags: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Build sort object
+    let sortOption = { createdAt: -1 };
+    if (sort === 'popular') sortOption = { views: -1 };
+    if (sort === 'likes') sortOption = { likes: -1 };
+    if (sort === 'price-low') sortOption = { price: 1 };
+    if (sort === 'price-high') sortOption = { price: -1 };
+    
+    const artworks = await Artwork.find(query)
+      .populate('creator', 'displayName avatar')
+      .populate('category', 'name slug')
+      .sort(sortOption);
+      
+    res.json({
+      success: true,
+      count: artworks.length,
+      data: artworks
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching artworks:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching artworks'
+    });
   }
 });
 
-// Get a single artwork
-router.get('/:id', async (req, res) => {
-  const { id } = req.params;
-  console.log('Fetching artwork with ID:', id);
-  
-  // Validate ID format (MongoDB ObjectId is 24 hex characters)
-  if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
-    console.error('Invalid artwork ID format:', id);
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Invalid artwork ID format' 
-    });
-  }
-
+// @route   GET /api/artworks/category/:slug
+// @desc    Get artworks by category slug
+// @access  Public
+router.get('/category/:slug', async (req, res) => {
   try {
-    const artwork = await Artwork.findById(id)
-      .populate('creator', 'displayName profileImage')
-      .populate('comments', 'content likes createdAt');
-      
-    if (!artwork) {
-      console.error('Artwork not found with ID:', id);
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Artwork not found',
-        id: id
+    const category = await Category.findOne({ slug: req.params.slug });
+    
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found'
       });
     }
     
-    console.log('Successfully found artwork:', artwork._id);
+    const artworks = await Artwork.find({ category: category._id })
+      .populate('creator', 'displayName avatar')
+      .sort({ createdAt: -1 });
+      
+    res.json({
+      success: true,
+      category: category.name,
+      count: artworks.length,
+      data: artworks
+    });
+  } catch (error) {
+    console.error('Error fetching artworks by category:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching category artworks'
+    });
+  }
+});
+
+// @route   POST /api/artworks
+// @desc    Create new artwork
+// @access  Private (artist)
+router.post('/', 
+  [
+    auth,
+    check('title', 'Title is required').not().isEmpty(),
+    check('image', 'Image URL is required').not().isEmpty(),
+    check('price', 'Price must be a positive number').isFloat({ min: 0 }),
+    check('category', 'Category is required').not().isEmpty()
+  ], 
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
+    }
+    
+    try {
+      const { title, image, description, price, category, tags, licenseType } = req.body;
+      
+      // Verify category exists
+      const categoryDoc = await Category.findById(category);
+      if (!categoryDoc) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid category'
+        });
+      }
+      
+      const newArtwork = new Artwork({
+        title,
+        image,
+        description,
+        price,
+        category: categoryDoc._id,
+        tags: tags || [],
+        licenseType: licenseType || 'standard',
+        creator: req.user.id
+      });
+      
+      const artwork = await newArtwork.save();
+      
+      res.status(201).json({
+        success: true,
+        data: artwork
+      });
+    } catch (error) {
+      console.error('Error creating artwork:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error while creating artwork'
+      });
+    }
+  }
+);
+
+// @route   GET /api/artworks/:id
+// @desc    Get single artwork
+// @access  Public
+router.get('/:id', async (req, res) => {
+  try {
+    const artwork = await Artwork.findById(req.params.id)
+      .populate('creator', 'displayName avatar')
+      .populate('category', 'name slug');
+      
+    if (!artwork) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artwork not found'
+      });
+    }
+    
+    // Increment view count
+    artwork.views += 1;
+    await artwork.save();
+    
     res.json({
       success: true,
       data: artwork
     });
   } catch (error) {
-    console.error('Error fetching artwork:', {
-      error: error.message,
-      id: id,
-      stack: error.stack
-    });
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error while fetching artwork',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Create a new artwork
-router.post('/', auth, async (req, res) => {
-  const artwork = new Artwork({
-    ...req.body,
-    creator: req.user.id
-  });
-
-  try {
-    const newArtwork = await artwork.save();
-    res.status(201).json(newArtwork);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// Update an artwork
-router.put('/:id', auth, async (req, res) => {
-  try {
-    const artwork = await Artwork.findById(req.params.id);
-    if (!artwork) return res.status(404).json({ message: 'Artwork not found' });
-    
-    // Only allow creator to update
-    if (artwork.creator.toString() !== req.user.id) {
-      return res.status(401).json({ message: 'Not authorized' });
+    console.error('Error fetching artwork:', error);
+    if (error.kind === 'ObjectId') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid artwork ID format'
+      });
     }
-
-    await Artwork.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true }
-    );
-    res.json({ message: 'Artwork updated successfully' });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching artwork'
+    });
   }
 });
 
-// Delete an artwork
+// @route   PUT /api/artworks/:id
+// @desc    Update artwork
+// @access  Private (artist)
+router.put('/:id', 
+  [
+    auth,
+    check('title', 'Title is required').not().isEmpty(),
+    check('image', 'Image URL is required').not().isEmpty(),
+    check('price', 'Price must be a positive number').isFloat({ min: 0 }),
+    check('category', 'Category is required').not().isEmpty()
+  ], 
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
+    }
+    
+    try {
+      const artwork = await Artwork.findById(req.params.id);
+      
+      if (!artwork) {
+        return res.status(404).json({
+          success: false,
+          message: 'Artwork not found'
+        });
+      }
+      
+      // Only allow creator to update
+      if (artwork.creator.toString() !== req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Not authorized'
+        });
+      }
+      
+      const { title, image, description, price, category, tags, licenseType } = req.body;
+      
+      // Verify category exists
+      const categoryDoc = await Category.findById(category);
+      if (!categoryDoc) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid category'
+        });
+      }
+      
+      artwork.title = title;
+      artwork.image = image;
+      artwork.description = description;
+      artwork.price = price;
+      artwork.category = categoryDoc._id;
+      artwork.tags = tags || [];
+      artwork.licenseType = licenseType || 'standard';
+      
+      await artwork.save();
+      
+      res.json({
+        success: true,
+        message: 'Artwork updated successfully'
+      });
+    } catch (error) {
+      console.error('Error updating artwork:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error while updating artwork'
+      });
+    }
+  }
+);
+
+// @route   DELETE /api/artworks/:id
+// @desc    Delete artwork
+// @access  Private (artist)
 router.delete('/:id', auth, async (req, res) => {
   try {
     const artwork = await Artwork.findById(req.params.id);
-    if (!artwork) return res.status(404).json({ message: 'Artwork not found' });
+    
+    if (!artwork) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artwork not found'
+      });
+    }
     
     // Only allow creator to delete
     if (artwork.creator.toString() !== req.user.id) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized'
+      });
     }
-
+    
     await Artwork.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Artwork deleted successfully' });
+    
+    res.json({
+      success: true,
+      message: 'Artwork deleted successfully'
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error deleting artwork:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting artwork'
+    });
   }
 });
 

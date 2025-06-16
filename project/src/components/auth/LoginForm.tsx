@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { validateEmail, validatePassword } from '../../utils/validations';
 
 interface LoginFormProps {
   onSwitchToSignup: () => void;
@@ -10,12 +11,24 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate fields
+    const emailErr = validateEmail(email);
+    const passwordErr = validatePassword(password);
+    
+    setEmailError(emailErr);
+    setPasswordError(passwordErr);
+    
+    if (emailErr || passwordErr) return;
+    
     setError('');
     setIsLoading(true);
     
@@ -58,6 +71,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup }) => {
             placeholder="your@email.com"
             required
           />
+          {emailError && (
+            <div className="mt-1 text-sm text-error-700">
+              {emailError}
+            </div>
+          )}
         </div>
         
         <div>
@@ -73,6 +91,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup }) => {
             placeholder="••••••••"
             required
           />
+          {passwordError && (
+            <div className="mt-1 text-sm text-error-700">
+              {passwordError}
+            </div>
+          )}
         </div>
         
         <div className="flex items-center justify-between">
