@@ -3,8 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Layout from '../components/layout/Layout';
 import { mockCommentData } from '../data/mockData';
-import { artworkAPI } from '../services/api';
-import { Artwork, Comment } from '../types';
+import { artworkAPI, orderAPI } from '../services/api';
+import { Artwork, Comment, Purchase } from '../types';
 import { 
   Heart, MessageCircle, Download, Share2, Pencil, 
   Clock, Tag, User, ArrowLeft, AlertCircle, Home as HomeIcon, RefreshCw
@@ -22,8 +22,8 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error in ArtworkDetail:', error, errorInfo);
+  componentDidCatch() {
+    // Error boundary intentionally left empty for production
   }
 
   render() {
@@ -76,104 +76,38 @@ const ArtworkDetail: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [related, setRelated] = useState<Artwork[]>([]);
   const [liked, setLiked] = useState(false);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!id) {
-        console.error('No artwork ID provided');
-        return;
-      }
-
-      if (!id) {
-        setError('No artwork ID provided');
-        setIsLoading(false);
-        return;
-      }
-
       try {
         setIsLoading(true);
         setError(null);
-        console.log('Fetching artwork with ID:', id);
         
-        // First, try to get the specific artwork
+        if (!id) {
+          setError('No artwork ID provided');
+          return;
+        }
+
         const res = await artworkAPI.getArtworkById(id);
-        console.log('Artwork API response:', res);
-        
-        if (!res.data) {
-          const errorMsg = 'No data in response from server';
-          console.error(errorMsg, res);
-          setError(errorMsg);
+        if (!res.data?.artwork) {
+          setError(res.data?.message ?? 'Artwork not found');
           return;
         }
         
-        if (!res.data.success) {
-          const errorMsg = res.data.message || 'Failed to load artwork';
-          console.error('API error:', errorMsg);
-          setError(errorMsg);
-          return;
-        }
+        setArtwork(res.data.artwork);
+        setLiked(res.data.artwork.isFavorited || false);
         
-        if (!res.data.data) {
-          const errorMsg = 'Artwork not found';
-          console.error(errorMsg, res.data);
-          setError(errorMsg);
-          return;
+        const relatedRes = await artworkAPI.getRelatedArtworks(id);
+        if (relatedRes.data?.artworks) {
+          setRelated(relatedRes.data.artworks);
         }
-
-        // Extract artwork from response data
-        const responseData = res.data.data;
-        
-        // Ensure we have a valid ID
-        const art = { ...responseData, id: responseData._id || responseData.id };
-        if (!art.id) {
-          console.error('No ID found in artwork data:', art);
-          return;
-        }
-
-        console.log('Setting artwork data:', art);
-        setArtwork(art);
-        setLiked(art.isFavorited || false);
-
-        // Then fetch all artworks for related items
-        try {
-          console.log('Fetching all artworks for related items');
-          const allRes = await artworkAPI.getAllArtworks();
-          
-          // Handle the response structure from backend
-          const artworks = Array.isArray(allRes.data?.data || allRes.data) 
-            ? (allRes.data.data || allRes.data).map((a: any) => ({
-                ...a,
-                id: a._id || a.id
-              }))
-            : [];
-          
-          console.log(`Found ${artworks.length} total artworks`);
-          
-          const relatedItems = artworks.filter((a: any) => 
-            a.category === art.category && 
-            a.id !== art.id &&
-            a.id // Ensure we have valid IDs
-          );
-          
-          console.log(`Found ${relatedItems.length} related artworks`);
-          setRelated(relatedItems);
-        } catch (relatedError) {
-          console.error('Error fetching related artworks:', relatedError);
-          setRelated([]);
-        }
-
-        // TODO: replace mock comments once backend endpoint available
-        setComments(mockCommentData);
-      } catch (err: any) {
-        const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch artwork';
-        console.error('Failed to fetch artwork:', {
-          error: err,
-          message: errorMsg,
-          response: err.response?.data,
-          status: err.response?.status,
-          id
-        });
-        setError(errorMsg);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load artwork';
+        setError(errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -207,6 +141,63 @@ const ArtworkDetail: React.FC = () => {
     
     setComments([newCommentObj, ...comments]);
     setNewComment('');
+  };
+
+  const handlePurchase = async () => {
+    if (!artwork) return;
+    
+    setPurchaseLoading(true);
+    setPurchaseError(null);
+    
+    try {
+      const purchase: Purchase = {
+        artworkId: artwork.id,
+        quantity: 1,
+        paymentMethod: 'stripe',
+        billingAddress: {
+          street: '123 Main St',
+          city: 'Anytown',
+          state: 'CA',
+          zipCode: '12345',
+          country: 'USA'
+        }
+      };
+      
+      const response = await orderAPI.createOrder(purchase);
+      
+      setPurchaseError(null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Purchase failed';
+      setPurchaseError(errorMessage);
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!artwork) return;
+    
+    setDownloadLoading(true);
+    setDownloadError(null);
+    
+    try {
+      const response = await orderAPI.downloadArtwork(artwork.id);
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${artwork.title}.jpg`);
+      document.body.appendChild(link);
+      link.click();
+      
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Download failed';
+      setDownloadError(errorMessage);
+    } finally {
+      setDownloadLoading(false);
+    }
   };
 
   if (isLoading) {
@@ -316,13 +307,35 @@ const ArtworkDetail: React.FC = () => {
                     <span className="ml-1">{comments.length}</span>
                   </button>
                   
-                  <button className="flex items-center text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                  {downloadError && (
+                    <div className="text-red-500 text-sm mb-2">{downloadError}</div>
+                  )}
+                  
+                  <button 
+                    onClick={handleDownload}
+                    className={`flex items-center ${downloadLoading ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400'} transition-colors`}
+                    disabled={downloadLoading}
+                  >
                     <Download size={20} />
-                    <span className="ml-1">{artwork.downloads}</span>
+                    <span className="ml-1">
+                      {downloadLoading ? 'Downloading...' : artwork.downloads}
+                    </span>
                   </button>
                 </div>
                 
                 <div className="flex space-x-2">
+                  <button 
+                    onClick={handlePurchase}
+                    className={`btn-primary ${purchaseLoading ? 'loading' : ''}`}
+                    disabled={purchaseLoading}
+                  >
+                    {purchaseLoading ? 'Processing...' : 'Purchase'}
+                  </button>
+                  
+                  {purchaseError && (
+                    <div className="text-red-500 text-sm">{purchaseError}</div>
+                  )}
+                  
                   <button className="btn-outline">
                     <Share2 size={18} className="mr-1" />
                     <span>Share</span>

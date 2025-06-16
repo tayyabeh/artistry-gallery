@@ -10,7 +10,7 @@ import {
   Facebook, Twitter, Instagram, Globe, Bell,
   CheckCircle, User, Share2
 } from 'lucide-react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { artworkAPI } from '../services/api';
 import { Artwork } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -20,11 +20,21 @@ import ProfilePhotoUpload from '../components/profile/ProfilePhotoUpload';
 const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState('artwork');
   const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
+  const [tempCoverImage, setTempCoverImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.coverImage) {
+      setTempCoverImage(user.coverImage);
+    } else {
+      setTempCoverImage(null);
+    }
+  }, [user?.coverImage]);
   
   const handleProfilePhotoChange = async (file: File | null) => {
     if (!file) {
@@ -89,6 +99,7 @@ const Profile: React.FC = () => {
         setCoverUploadError(null);
         await authAPI.deleteCover();
         await refreshUser();
+        setTempCoverImage(null); // Reset cover image on removal
       } catch (error) {
         console.error('Failed to remove cover photo:', error);
         setCoverUploadError('Failed to remove cover photo');
@@ -107,9 +118,15 @@ const Profile: React.FC = () => {
       
       // Upload the cover and refresh user data
       const response = await authAPI.uploadCover(file);
-      console.log('Cover upload response:', response);
+      console.log('Cover upload response full data:', response.data);
+      
+      // Set temporary cover image from response
+      if (response.data && response.data.cover) {
+        setTempCoverImage(response.data.cover);
+      }
       
       await refreshUser();
+      console.log('User data after refresh:', user);
       
     } catch (error: any) {
       console.error('Failed to upload cover photo:', error);
@@ -129,6 +146,16 @@ const Profile: React.FC = () => {
     }
   };
   
+  const handleArtworkClick = (artwork: any) => {
+    console.log('Clicked artwork with ID:', artwork.id);
+    if (!artwork.id) {
+      console.error('Artwork ID is undefined, cannot fetch details');
+      return;
+    }
+    // Navigate to artwork detail page
+    navigate(`/artwork/${artwork.id}`);
+  };
+  
   if (!user) {
     return (
       <Layout>
@@ -141,37 +168,58 @@ const Profile: React.FC = () => {
 
   const currentUser = user;
   
-  const [userArtworks, setUserArtworks] = useState<Artwork[]>([]);
+  // Number of artworks to show per page
+  const ARTWORKS_PER_PAGE = 12;
+  // Pagination states for artworks
+  const [allUserArtworks, setAllUserArtworks] = useState<Artwork[]>([]);
+  const [displayedArtworks, setDisplayedArtworks] = useState<Artwork[]>([]);
+  const [artworksPage, setArtworksPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [favoriteArtworks] = useState<Artwork[]>([]);
-  
-  // Fetch artworks created by the current user
   useEffect(() => {
     const fetchUserArtworks = async () => {
       try {
         const res = await artworkAPI.getAllArtworks();
+        console.log('All Artworks API Response:', res.data);
         const all: Artwork[] = res.data;
-        // Match artworks where creator matches current user id or is an object containing that id
         const mine = all.filter((art: any) => {
           if (!art.creator) return false;
           if (typeof art.creator === 'string') return art.creator === currentUser.id;
           return art.creator === currentUser.id || art.creator._id === currentUser.id || art.creator.id === currentUser.id;
         });
-        setUserArtworks(mine);
+        console.log('Filtered User Artworks:', mine);
+        setAllUserArtworks(mine);
+        setDisplayedArtworks(mine.slice(0, ARTWORKS_PER_PAGE));
+        setArtworksPage(1);
       } catch (err) {
         console.error('Failed to load user artworks', err);
       }
     };
     fetchUserArtworks();
   }, [currentUser.id]);
-  
-  // Followers/Following counts from user data (fallback to 0)
+
+  useEffect(() => {
+    console.log('Displayed Artworks:', displayedArtworks.map(art => ({ id: art.id, title: art.title, idDefined: art.id !== undefined })));
+  }, [displayedArtworks]);
+
+  const handleLoadMoreArtworks = () => {
+    setIsLoadingMore(true);
+    setTimeout(() => { // Simulate async fetch if needed
+      const nextPage = artworksPage + 1;
+      const nextArtworks = allUserArtworks.slice(0, nextPage * ARTWORKS_PER_PAGE);
+      setDisplayedArtworks(nextArtworks);
+      setArtworksPage(nextPage);
+      setIsLoadingMore(false);
+    }, 300);
+  };
+
   const followersCount = currentUser.followers ?? 0;
   const followingCount = currentUser.following ?? 0;
   
   // Stats – replace placeholder numbers with user data when available
   const stats = [
-    { label: 'Artworks', value: userArtworks.length, icon: ShoppingBag },
-    { label: 'Likes', value: userArtworks.reduce((sum, art) => sum + (art.likes ?? 0), 0), icon: Heart },
+    { label: 'Artworks', value: displayedArtworks.length, icon: ShoppingBag },
+    { label: 'Likes', value: displayedArtworks.reduce((sum, art) => sum + (art.likes ?? 0), 0), icon: Heart },
     { label: 'Views', value: currentUser.views ?? 0, icon: Clock },
     { label: 'Downloads', value: currentUser.downloads ?? 0, icon: Download },
   ];
@@ -194,25 +242,39 @@ const Profile: React.FC = () => {
         {/* Profile Header */}
         <div className="relative">
           <div className="relative h-64 rounded-xl overflow-hidden">
+            {/* Background image or fallback gradient */}
+            <div
+              className="absolute inset-0 w-full h-full z-0"
+              style={{
+                backgroundImage: tempCoverImage
+                  ? `url(${tempCoverImage})`
+                  : currentUser.coverImage
+                  ? `url(${currentUser.coverImage})`
+                  : 'linear-gradient(90deg, #4776e6 0%, #8e54e9 100%)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                transition: 'background-image 0.3s'
+              }}
+            />
             <CoverPhotoUpload 
-              currentImage={currentUser.coverImage || ''}
+              currentImage={currentUser.coverImage || tempCoverImage || ''}
               onImageChange={handleCoverPhotoChange}
               disabled={isUploadingCover}
-              className="h-full w-full"
+              className="h-full w-full relative z-10"
             />
             {isUploadingCover && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
               </div>
             )}
             {coverUploadError && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm">
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm z-20">
                 {coverUploadError}
               </div>
             )}
           </div>
           
-          <div className="absolute -bottom-16 left-8 flex items-end">
+          <div className="absolute -bottom-16 left-8 flex items-end z-30">
             <div className="relative">
               <ProfilePhotoUpload
                 currentImage={currentUser.avatar}
@@ -222,12 +284,12 @@ const Profile: React.FC = () => {
                 disabled={isUploading}
               />
               {isUploading && (
-                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center z-40">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
                 </div>
               )}
               {uploadError && (
-                <div className="absolute -bottom-6 left-0 right-0 text-xs text-red-500 text-center">
+                <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-2 py-1 rounded text-xs w-48 text-center z-40">
                   {uploadError}
                 </div>
               )}
@@ -426,14 +488,35 @@ const Profile: React.FC = () => {
                   Upload New
                 </RouterLink>
               </div>
-              <ArtworkGrid artworks={userArtworks} />
+              <ArtworkGrid 
+                artworks={displayedArtworks} 
+                onArtworkClick={handleArtworkClick} 
+              />
+              {displayedArtworks.length < allUserArtworks.length && (
+                <div className="flex justify-center mt-6">
+                  <button
+                    className="btn-outline flex items-center gap-2 px-6 py-2 rounded-lg border border-primary-500 text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition disabled:opacity-50"
+                    onClick={handleLoadMoreArtworks}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore ? (
+                      <span>Loading...</span>
+                    ) : (
+                      <>
+                        Load More Artworks
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" /></svg>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'favorites' && (
             <div>
               <h2 className="text-xl font-bold mb-6">Favorite Artworks</h2>
-              <ArtworkGrid artworks={favoriteArtworks} />
+              <ArtworkGrid artworks={[]} />
             </div>
           )}
           

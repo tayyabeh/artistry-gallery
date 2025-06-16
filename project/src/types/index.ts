@@ -78,3 +78,27 @@ export interface CartItem {
   item: MarketplaceItem;
   quantity: number;
 }
+
+export interface Order {
+  id: string;
+  artworkId: string;
+  userId: string;
+  quantity: number;
+  price: number;
+  status: 'pending' | 'completed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Purchase {
+  artworkId: string;
+  quantity: number;
+  paymentMethod: string;
+  billingAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  };
+}

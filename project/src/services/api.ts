@@ -1,10 +1,38 @@
 import axios from 'axios';
+import { User, Artwork, Comment, Order, Purchase } from '../types';
 
-const API_URL = 'http://localhost:5000/api';
+// Check if API_URL is properly set from environment
+console.log('Current API base URL:', import.meta.env.VITE_API_BASE_URL);
+
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+interface RegisterData {
+  email: string;
+  username: string;
+  password: string;
+  displayName?: string;
+}
+
+interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+interface ArtworkFormData {
+  title: string;
+  description?: string;
+  tags: string[];
+  category: string;
+  image: File;
+}
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: API_URL,
+  // Use VITE_API_BASE_URL if set, otherwise fall back to localhost:5000
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -24,14 +52,33 @@ api.interceptors.request.use(
 
 // API endpoints
 export const authAPI = {
-  register: (userData: any) => api.post('/users/register', userData),
-  login: (credentials: any) => api.post('/users/login', credentials),
-  getCurrentUser: () => api.get('/users/me'),
-  updateProfile: (data: any) => api.put('/users/me', data),
+  register: async (userData: RegisterData) => {
+    // Validate username format
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(userData.username)) {
+      throw new Error('Username can only contain letters, numbers and underscores');
+    }
+
+    try {
+      const res = await api.post<AuthResponse>('/users/register', {
+        email: userData.email,
+        username: userData.username,
+        password: userData.password,
+        displayName: userData.displayName || userData.username
+      });
+      return res;
+    } catch (error: any) {
+      console.error('Registration error:', error.response?.data);
+      throw new Error(error.response?.data?.message || 'Registration failed');
+    }
+  },
+  login: (credentials: LoginCredentials) => api.post<AuthResponse>('/users/login', credentials),
+  getCurrentUser: () => api.get<User>('/users/me'),
+  updateProfile: (data: Partial<User>) => api.put<User>('/users/me', data),
   uploadAvatar: (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);
-    return api.post('/users/me/avatar', formData, {
+    return api.post<User>('/users/me/avatar', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -40,38 +87,50 @@ export const authAPI = {
   uploadCover: (file: File) => {
     const formData = new FormData();
     formData.append('cover', file);
-    return api.post('/users/me/cover', formData, {
+    return api.post<User>('/users/me/cover', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
   },
-  deleteAvatar: () => api.delete('/users/me/avatar'),
-  deleteCover: () => api.delete('/users/me/cover')
+  deleteAvatar: () => api.delete<User>('/users/me/avatar'),
+  deleteCover: () => api.delete<User>('/users/me/cover')
 };
 
 export const artworkAPI = {
-  getAllArtworks: () => api.get('/artworks'),
-  getArtworkById: (id: string) => api.get(`/artworks/${id}`),
-  createArtwork: (artworkData: any) => {
-    if (artworkData instanceof FormData) {
-      return api.post('/artworks', artworkData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-    }
-    return api.post('/artworks', artworkData);
-  },
-  updateArtwork: (id: string, artworkData: any) => api.put(`/artworks/${id}`, artworkData),
-  deleteArtwork: (id: string) => api.delete(`/artworks/${id}`)
+  getAllArtworks: () => api.get<{ artworks: Artwork[] }>('/artworks'),
+  getArtworkById: (id: string) => api.get<{ artwork: Artwork, message?: string }>(`/artworks/${id}`),
+  getRelatedArtworks: (id: string) => api.get<{ artworks: Artwork[] }>(`/artworks/${id}/related`),
+  createArtwork: (artworkData: ArtworkFormData | FormData) => 
+    api.post<{ artwork: Artwork }>('/artworks', artworkData),
+  updateArtwork: (id: string, artworkData: Partial<Artwork>) => 
+    api.put<{ artwork: Artwork }>(`/artworks/${id}`, artworkData),
+  deleteArtwork: (id: string) => api.delete(`/artworks/${id}`),
+  likeArtwork: (id: string) => api.put<{ artwork: Artwork }>(`/artworks/like/${id}`),
+  unlikeArtwork: (id: string) => api.put<{ artwork: Artwork }>(`/artworks/unlike/${id}`)
 };
 
 export const commentAPI = {
-  getArtworkComments: (artworkId: string) => api.get(`/comments/artwork/${artworkId}`),
-  addComment: (commentData: any) => api.post('/comments', commentData),
+  getArtworkComments: (artworkId: string) => api.get<Comment[]>(`/comments/artwork/${artworkId}`),
+  addComment: (commentData: { content: string, artworkId: string }) => 
+    api.post<Comment>('/comments', commentData),
   deleteComment: (id: string) => api.delete(`/comments/${id}`),
-  likeComment: (id: string) => api.put(`/comments/like/${id}`)
+  likeComment: (id: string) => api.put<Comment>(`/comments/like/${id}`)
+};
+
+// Order API
+export const orderAPI = {
+  createOrder: async (purchase: Purchase) => {
+    return api.post<Order>('/orders', purchase);
+  },
+  getUserOrders: async () => {
+    return api.get<Order[]>('/orders/me');
+  },
+  downloadArtwork: async (orderId: string) => {
+    return api.get(`/orders/${orderId}/download`, {
+      responseType: 'blob'
+    });
+  }
 };
 
 export default api;

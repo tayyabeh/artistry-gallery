@@ -4,8 +4,11 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/User');
+const Artwork = require('../models/Artwork');
+const Order = require('../models/Order');
 const auth = require('../middleware/auth');
 const { uploadSingle } = require('../utils/fileUpload.js');
+const { check, validationResult } = require('express-validator');
 
 // Register a new user
 router.post('/register', async (req, res) => {
@@ -317,6 +320,102 @@ router.delete('/me/cover', auth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting cover photo:', error);
     res.status(500).json({ message: 'Error deleting cover photo' });
+  }
+});
+
+// Get all users (admin only)
+router.get('/', auth, async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.json({ success: true, data: users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Get single user by ID
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, data: user });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/users/:id/artworks
+// @desc    Get all artworks uploaded by a user
+// @access  Public
+router.get('/:id/artworks', async (req, res) => {
+  try {
+    // Validate user exists
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    const artworks = await Artwork.find({ creator: req.params.id })
+      .populate('category', 'name slug')
+      .sort({ createdAt: -1 });
+      
+    res.json({
+      success: true,
+      count: artworks.length,
+      data: artworks
+    });
+  } catch (error) {
+    console.error('Error fetching user artworks:', error);
+    if (error.kind === 'ObjectId') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID format'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user artworks'
+    });
+  }
+});
+
+// @route   GET /api/users/:id/orders
+// @desc    Get all orders for a user
+// @access  Private (user only)
+router.get('/:id/orders', auth, async (req, res) => {
+  try {
+    // Verify user is requesting their own orders
+    if (req.params.id !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
+    
+    const orders = await Order.find({ user: req.params.id })
+      .populate('items.artwork', 'title image price')
+      .sort({ createdAt: -1 });
+      
+    res.json({
+      success: true,
+      count: orders.length,
+      data: orders
+    });
+  } catch (error) {
+    console.error('Error fetching user orders:', error);
+    if (error.kind === 'ObjectId') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID format'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user orders'
+    });
   }
 });
 

@@ -11,34 +11,73 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { signup, logout } = useAuth();
+  // Field specific error states
+  const [emailError, setEmailError] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+
+  const { signup, login } = useAuth();
+
+  const validateEmail = (email: string) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) return 'Email is required';
+    if (!re.test(email)) return 'Please enter a valid email';
+    return '';
+  };
+
+  const validateUsername = (username: string) => {
+    const re = /^[a-zA-Z0-9_]+$/;
+    if (!username) return 'Username is required';
+    if (username.length < 3) return 'Username must be at least 3 characters';
+    if (username.length > 30) return 'Username cannot exceed 30 characters';
+    if (!re.test(username)) return 'Username can only contain letters, numbers and underscores';
+    return '';
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    return '';
+  };
+
+  const validatePhone = (phone: string) => {
+    if (!phone) return ''; // Optional
+    const re = /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/;
+    if (!re.test(phone)) return 'Please enter a valid phone number';
+    return '';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+    setEmailError(validateEmail(email));
+    setUsernameError(validateUsername(username));
+    setPasswordError(validatePassword(password));
+    setPhoneError(validatePhone(phone));
+
+    if (emailError || usernameError || passwordError || phoneError) return;
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-    
+
     setIsLoading(true);
-    console.log('Attempting signup with:', { email, username, password: '***' });
-    
     try {
-      // Pass username as displayName as well
       await signup(email, username, password, username);
-      // Immediately log out to prevent auto-redirect to protected routes
-      logout();
-      console.log('Signup successful');
-      setSuccess(true);
+      setSuccess(true); 
+      setEmail('');
+      setUsername('');
+      setPassword('');
+      setConfirmPassword('');
+      setPhone('');
     } catch (err: any) {
-      console.error('Detailed signup error:', err);
-      // Show more specific error message if available
       setError(err.message || 'Failed to create an account');
     } finally {
       setIsLoading(false);
@@ -54,17 +93,16 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
       className="w-full max-w-md"
     >
       {success ? (
-        <>
-          <h2 className="text-2xl font-bold mb-6 text-center">Account Created!</h2>
-          <p className="mb-6 text-center">Your account has been created successfully. You can now sign in.</p>
-          <button
-            type="button"
-            onClick={onSwitchToLogin}
-            className="btn-primary w-full flex justify-center"
+        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+          <p className="font-bold">Success!</p>
+          <p>Your account has been created successfully. Please sign in to continue.</p>
+          <button 
+            onClick={() => onSwitchToLogin()} 
+            className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            Go to Sign In
+            Sign In Now
           </button>
-        </>
+        </div>
       ) : (
         <> 
           <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
@@ -89,6 +127,9 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
             placeholder="your@email.com"
             required
           />
+          {emailError && (
+            <div className="mt-1 text-error-700">{emailError}</div>
+          )}
         </div>
         
         <div>
@@ -104,6 +145,9 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
             placeholder="coolartist"
             required
           />
+          {usernameError && (
+            <div className="mt-1 text-error-700">{usernameError}</div>
+          )}
         </div>
         
         <div>
@@ -119,6 +163,9 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
             placeholder="••••••••"
             required
           />
+          {passwordError && (
+            <div className="mt-1 text-error-700">{passwordError}</div>
+          )}
         </div>
         
         <div>
@@ -134,6 +181,23 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
             placeholder="••••••••"
             required
           />
+        </div>
+        
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium mb-1">
+            Phone Number
+          </label>
+          <input
+            id="phone"
+            type="text"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="input w-full"
+            placeholder="+1234567890"
+          />
+          {phoneError && (
+            <div className="mt-1 text-error-700">{phoneError}</div>
+          )}
         </div>
         
         <div className="flex items-center">

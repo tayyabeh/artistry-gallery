@@ -10,6 +10,12 @@ import { useAuth } from '../../context/AuthContext';
 import Layout from '../layout/Layout';
 // import { mockUserData } from '../../data/mockData';
 import { authAPI } from '../../services/api';
+import { 
+  validateEmail, 
+  validateUsername,
+  validatePhone,
+  validateMaxLength 
+} from '../../utils/validations';
 
 const ProfileEdit: React.FC = () => {
   const navigate = useNavigate();
@@ -100,74 +106,58 @@ const ProfileEdit: React.FC = () => {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.displayName.trim()) {
-      newErrors.displayName = 'Display name is required';
+    newErrors.username = validateUsername(formData.username);
+    newErrors.email = validateEmail(formData.email);
+    
+    if (formData.phone) {
+      newErrors.phone = validatePhone(formData.phone);
     }
     
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      newErrors.username = 'Username can only contain letters, numbers, and underscores';
-    }
-    
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
-    }
-    
-    // Validate social links if provided
-    if (formData.socialLinks.twitter && !formData.socialLinks.twitter.includes('twitter.com')) {
-      newErrors['social.twitter'] = 'Must be a valid Twitter URL';
-    }
-    
-    if (formData.socialLinks.instagram && !formData.socialLinks.instagram.includes('instagram.com')) {
-      newErrors['social.instagram'] = 'Must be a valid Instagram URL';
-    }
-    
-    if (formData.socialLinks.facebook && !formData.socialLinks.facebook.includes('facebook.com')) {
-      newErrors['social.facebook'] = 'Must be a valid Facebook URL';
-    }
+    newErrors.bio = validateMaxLength(formData.bio, 500, 'Bio');
+    newErrors.location = validateMaxLength(formData.location, 100, 'Location');
     
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return Object.values(newErrors).every(err => !err);
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      try {
-        await authAPI.updateProfile({
-          displayName: formData.displayName,
-          username: formData.username,
-          bio: formData.bio,
-          location: formData.location,
-          socialLinks: formData.socialLinks,
-          avatar: formData.profileImage,
-          coverImage: formData.coverImage
-        });
-        // On success navigate back
-        await refreshUser();
-        navigate('/profile');
-      } catch (err) {
-        console.error('Profile update failed', err);
-        alert('Failed to update profile');
-      }
-      
-      // Update profile image if changed
-      if (profileImagePreview) {
-        formData.profileImage = profileImagePreview;
-      }
-      
-      // Update cover image if changed
-      if (coverImagePreview) {
-        formData.coverImage = coverImagePreview;
-      }
-      
-      // Redirect back to profile
+    if (!validateForm()) return;
+    
+    try {
+      await authAPI.updateProfile({
+        displayName: formData.displayName,
+        username: formData.username,
+        bio: formData.bio,
+        location: formData.location,
+        socialLinks: formData.socialLinks,
+        avatar: formData.profileImage,
+        coverImage: formData.coverImage
+      });
+      // On success navigate back
+      await refreshUser();
       navigate('/profile');
+    } catch (err) {
+      console.error('Profile update failed', err);
+      setErrors({
+        ...errors,
+        form: 'Failed to update profile. Please try again.'
+      });
     }
+    
+    // Update profile image if changed
+    if (profileImagePreview) {
+      formData.profileImage = profileImagePreview;
+    }
+    
+    // Update cover image if changed
+    if (coverImagePreview) {
+      formData.coverImage = coverImagePreview;
+    }
+    
+    // Redirect back to profile
+    navigate('/profile');
   };
 
   return (
@@ -266,12 +256,6 @@ const ProfileEdit: React.FC = () => {
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:text-white"
                 />
-                {errors.displayName && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
-                    <AlertCircle size={14} className="mr-1" />
-                    {errors.displayName}
-                  </p>
-                )}
               </div>
               
               <div>
@@ -310,6 +294,12 @@ const ProfileEdit: React.FC = () => {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:text-white"
                   placeholder="Tell others about yourself..."
                 />
+                {errors.bio && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <AlertCircle size={14} className="mr-1" />
+                    {errors.bio}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -343,6 +333,12 @@ const ProfileEdit: React.FC = () => {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:text-white"
                   placeholder="e.g. New York, USA"
                 />
+                {errors.location && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <AlertCircle size={14} className="mr-1" />
+                    {errors.location}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -365,12 +361,6 @@ const ProfileEdit: React.FC = () => {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:text-white"
                   placeholder="https://twitter.com/yourusername"
                 />
-                {errors['social.twitter'] && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
-                    <AlertCircle size={14} className="mr-1" />
-                    {errors['social.twitter']}
-                  </p>
-                )}
               </div>
               
               <div>
@@ -386,12 +376,6 @@ const ProfileEdit: React.FC = () => {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:text-white"
                   placeholder="https://instagram.com/yourusername"
                 />
-                {errors['social.instagram'] && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
-                    <AlertCircle size={14} className="mr-1" />
-                    {errors['social.instagram']}
-                  </p>
-                )}
               </div>
               
               <div>
@@ -407,12 +391,6 @@ const ProfileEdit: React.FC = () => {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-slate-700 dark:text-white"
                   placeholder="https://facebook.com/yourusername"
                 />
-                {errors['social.facebook'] && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
-                    <AlertCircle size={14} className="mr-1" />
-                    {errors['social.facebook']}
-                  </p>
-                )}
               </div>
               
               <div>
