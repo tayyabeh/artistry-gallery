@@ -130,6 +130,16 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
+// Import routes
+const usersRouter = require('./routes/users');
+const artworksRouter = require('./routes/artworks');
+const ordersRouter = require('./routes/orders');
+
+// Mount routes
+app.use('/api/users', usersRouter);
+app.use('/api/artworks', artworksRouter);
+app.use('/api/orders', ordersRouter);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
@@ -139,8 +149,6 @@ app.get('/health', (req, res) => {
 });
 
 // Routes
-app.use('/api/artworks', require('./routes/artworks'));
-app.use('/api/users', require('./routes/users'));
 app.use('/api/comments', require('./routes/comments'));
 
 const PORT = process.env.PORT || 5000;

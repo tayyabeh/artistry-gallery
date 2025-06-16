@@ -5,9 +5,10 @@ import ArtworkCard from './ArtworkCard';
 
 interface ArtworkGridProps {
   artworks: Artwork[];
+  onArtworkClick?: (artwork: Artwork) => void;
 }
 
-const ArtworkGrid: React.FC<ArtworkGridProps> = ({ artworks }) => {
+const ArtworkGrid: React.FC<ArtworkGridProps> = ({ artworks, onArtworkClick }) => {
   const breakpointColumns = {
     default: 4,
     1100: 3,
@@ -22,7 +23,7 @@ const ArtworkGrid: React.FC<ArtworkGridProps> = ({ artworks }) => {
       columnClassName="masonry-grid_column"
     >
       {artworks.map((artwork) => (
-        <ArtworkCard key={artwork.id} artwork={artwork} />
+        <ArtworkCard key={artwork.id} artwork={artwork} onArtworkClick={onArtworkClick} />
       ))}
     </Masonry>
   );
