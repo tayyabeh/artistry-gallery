@@ -8,6 +8,13 @@ const Category = require('../models/Category');
 const auth = require('../middleware/auth');
 const { check, validationResult } = require('express-validator');
 
+// Helper to prepend absolute URL for uploaded image paths
+const makeFullImageUrl = (req, imgPath) => {
+  if (!imgPath) return imgPath;
+  if (/^https?:\/\//i.test(imgPath)) return imgPath; // already full
+  return `${req.protocol}://${req.get('host')}${imgPath}`;
+};
+
 // @route   GET /api/artworks
 // @desc    Get all artworks with optional filtering
 // @access  Public
@@ -43,13 +50,17 @@ router.get('/', async (req, res) => {
     const artworks = await Artwork.find(query)
       .populate('creator', 'displayName avatar')
       .populate('category', 'name slug')
-      .sort(sortOption);
-      
-    res.json({
-      success: true,
-      count: artworks.length,
-      data: artworks
-    });
+      .sort(sortOption)
+      .lean();
+
+    const formatted = artworks.map((art) => ({
+      ...art,
+      id: art._id,
+      image: makeFullImageUrl(req, art.image)
+    }));
+
+    // Return plain array for easier frontend consumption
+    res.json(formatted);
   } catch (error) {
     console.error('Error fetching artworks:', error);
     res.status(500).json({
@@ -126,7 +137,14 @@ router.post('/',
         categoryDoc = await Category.findOne({ slug: category });
       }
       if (!categoryDoc) {
-        return res.status(400).json({ success: false, message: 'Invalid category' });
+        // Auto-create category when it does not exist
+        const slugify = (text) => text.toString().toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-_]/g, '-');
+        const newCat = new Category({
+          name: category.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+          slug: slugify(category)
+        });
+        await newCat.save();
+        categoryDoc = newCat;
       }
 
       // Handle base64 image uploads by saving to public/uploads
