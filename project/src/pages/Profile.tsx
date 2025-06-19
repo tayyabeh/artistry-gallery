@@ -120,9 +120,12 @@ const Profile: React.FC = () => {
       const response = await authAPI.uploadCover(file);
       console.log('Cover upload response full data:', response.data);
       
-      // Set temporary cover image from response
-      if (response.data && response.data.cover) {
-        setTempCoverImage(response.data.cover);
+      // Set temporary cover image from response (handles both new and legacy keys)
+      if (response.data) {
+        const imgUrl = response.data.coverImage || response.data.cover;
+        if (imgUrl) {
+          setTempCoverImage(imgUrl);
+        }
       }
       
       await refreshUser();
