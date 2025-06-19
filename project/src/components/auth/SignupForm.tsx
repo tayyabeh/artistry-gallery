@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface SignupFormProps {
@@ -22,7 +23,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const [passwordError, setPasswordError] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
-  const { signup, login } = useAuth();
+  const { signup } = useAuth();
 
   const validateEmail = (email: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -70,7 +71,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
 
     setIsLoading(true);
     try {
-      await signup(email, username, password, username);
+      await signup(email, username, password, username, phone);
       setSuccess(true); 
       setEmail('');
       setUsername('');
@@ -93,12 +94,13 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
       className="w-full max-w-md"
     >
       {success ? (
-        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-          <p className="font-bold">Success!</p>
-          <p>Your account has been created successfully. Please sign in to continue.</p>
+        <div className="p-8 bg-gradient-to-br from-primary-600/90 to-accent-500/90 rounded-2xl shadow-2xl flex flex-col items-center text-white">
+          <CheckCircle className="w-12 h-12 mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Account Created!</h2>
+          <p className="text-center mb-6 text-sm opacity-90">Your account has been created successfully.</p>
           <button 
             onClick={() => onSwitchToLogin()} 
-            className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            className="w-full py-2 px-4 rounded-md bg-white text-primary-700 font-semibold hover:bg-gray-100 transition"
           >
             Sign In Now
           </button>

@@ -1,7 +1,7 @@
-import { useState, useContext } from 'react';
-import { signup } from '../services/auth';
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../contexts/AuthContext';
+
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -11,8 +11,9 @@ export default function Signup() {
     phone: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
-  const { login } = useContext(AuthContext);
+  const { signup } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -24,8 +25,10 @@ export default function Signup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await signup(formData);
-      navigate('/signin');
+      const { email, name, password, phone } = formData;
+      await signup(email, name, password, name, phone, false);
+      setSuccess(true);
+      setFormData({ name: '', email: '', password: '', phone: '' });
     } catch (err) {
       setError(err.message || 'Signup failed');
     }
@@ -33,8 +36,21 @@ export default function Signup() {
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-center">Sign Up</h2>
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+      {success ? (
+        <>
+          <h2 className="text-2xl font-bold mb-6 text-center text-green-700">Success!</h2>
+          <p className="text-center mb-6">Your account has been created successfully.</p>
+          <button
+            onClick={() => navigate('/signin')}
+            className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
+          >
+            Sign In Now
+          </button>
+        </>
+      ) : (
+        <>
+          <h2 className="text-2xl font-bold mb-6 text-center">Sign Up</h2>
+          {error && <div className="text-red-500 mb-4">{error}</div>}
       
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
@@ -92,6 +108,8 @@ export default function Signup() {
           Sign Up
         </button>
       </form>
+        </>
+      )}
     </div>
   );
 }

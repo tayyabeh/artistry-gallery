@@ -14,6 +14,7 @@ interface RegisterData {
   username: string;
   password: string;
   displayName?: string;
+  phone?: string;
 }
 
 interface AuthResponse {
@@ -64,7 +65,8 @@ export const authAPI = {
         email: userData.email,
         username: userData.username,
         password: userData.password,
-        displayName: userData.displayName || userData.username
+        displayName: userData.displayName || userData.username,
+        phone: userData.phone
       });
       return res;
     } catch (error: any) {
@@ -109,6 +111,7 @@ export const artworkAPI = {
   likeArtwork: (id: string) => api.put<{ artwork: Artwork }>(`/artworks/like/${id}`),
   unlikeArtwork: (id: string) => api.put<{ artwork: Artwork }>(`/artworks/unlike/${id}`)
 };
+
 
 export const commentAPI = {
   getArtworkComments: (artworkId: string) => api.get<Comment[]>(`/comments/artwork/${artworkId}`),

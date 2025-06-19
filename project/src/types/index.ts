@@ -62,6 +62,7 @@ export interface AuthContextType {
     username: string,
     password: string,
     displayName?: string,
+    phone?: string,
     autoLogin?: boolean
   ) => Promise<void>;
   logout: () => void;
