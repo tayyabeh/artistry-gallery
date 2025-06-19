@@ -127,9 +127,12 @@ router.get('/me', auth, async (req, res) => {
     // Convert to plain object to modify
     const userObj = user.toObject();
     
-    // If user has an avatar, include the full URL
+    // Add full URLs for avatar and cover
     if (userObj.avatar) {
       userObj.avatar = `${req.protocol}://${req.get('host')}${user.avatar}`;
+    }
+    if (userObj.cover) {
+      userObj.coverImage = `${req.protocol}://${req.get('host')}${user.cover}`;
     }
     
     res.json(userObj);
@@ -223,7 +226,7 @@ router.post('/me/cover', auth, uploadSingle('cover'), async (req, res) => {
 
     // Return the full URL for the cover
     const fullUrl = `${req.protocol}://${req.get('host')}${coverPath}`;
-    res.json({ cover: fullUrl });
+    res.json({ coverImage: fullUrl });
   } catch (error) {
     console.error('Error uploading cover photo:', error);
     // Clean up the uploaded file in case of error
@@ -249,7 +252,7 @@ router.post('/me/cover', auth, uploadSingle('cover'), async (req, res) => {
     }
 
     // Delete old cover photo if it exists
-    if (user.coverImage) {
+    if (user.cover) {
       const oldCoverPath = path.join(__dirname, '../../public', user.coverImage);
       if (fs.existsSync(oldCoverPath)) {
         fs.unlinkSync(oldCoverPath);
@@ -306,14 +309,14 @@ router.delete('/me/cover', auth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.coverImage) {
-      const coverPath = path.join(__dirname, '../../public', user.coverImage);
+    if (user.cover) {
+      const coverPath = path.join(__dirname, '../../public', user.cover);
       if (fs.existsSync(coverPath)) {
         fs.unlinkSync(coverPath);
       }
     }
 
-    user.coverImage = '';
+    user.cover = '';
     await user.save();
 
     res.json({ success: true });
