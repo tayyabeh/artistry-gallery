@@ -1,4 +1,7 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Artwork = require('../models/Artwork');
 const Category = require('../models/Category');
@@ -97,7 +100,7 @@ router.post('/',
     auth,
     check('title', 'Title is required').not().isEmpty(),
     check('image', 'Image URL is required').not().isEmpty(),
-    check('price', 'Price must be a positive number').isFloat({ min: 0 }),
+    check('price').optional().isFloat({ min: 0 }),
     check('category', 'Category is required').not().isEmpty()
   ], 
   async (req, res) => {
@@ -112,26 +115,51 @@ router.post('/',
     try {
       const { title, image, description, price, category, tags, licenseType } = req.body;
       
-      // Verify category exists
-      const categoryDoc = await Category.findById(category);
-      if (!categoryDoc) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid category'
-        });
-      }
       
+        
+      
+      // Resolve category (accept slug or ObjectId)
+      let categoryDoc;
+      if (mongoose.Types.ObjectId.isValid(category)) {
+        categoryDoc = await Category.findById(category);
+      } else {
+        categoryDoc = await Category.findOne({ slug: category });
+      }
+      if (!categoryDoc) {
+        return res.status(400).json({ success: false, message: 'Invalid category' });
+      }
+
+      // Handle base64 image uploads by saving to public/uploads
+      let imageUrl = image;
+      if (typeof image === 'string' && image.startsWith('data:image')) {
+        const matches = image.match(/^data:(.+);base64,(.+)$/);
+        if (!matches) {
+          return res.status(400).json({ success: false, message: 'Invalid image data' });
+        }
+        const mime = matches[1];
+        const base64Data = matches[2];
+        const ext = mime.split('/')[1] || 'png';
+        const buffer = Buffer.from(base64Data, 'base64');
+        const uploadsDir = path.join(__dirname, '..', '..', 'public', 'uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const filename = `artwork_${Date.now()}.${ext}`;
+        fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+        imageUrl = `/uploads/${filename}`;
+      }
+
       const newArtwork = new Artwork({
         title,
-        image,
+        image: imageUrl,
         description,
-        price,
+        price: price ?? 0,
         category: categoryDoc._id,
         tags: tags || [],
         licenseType: licenseType || 'standard',
         creator: req.user.id
       });
-      
+
       const artwork = await newArtwork.save();
       
       res.status(201).json({
@@ -195,7 +223,7 @@ router.put('/:id',
     auth,
     check('title', 'Title is required').not().isEmpty(),
     check('image', 'Image URL is required').not().isEmpty(),
-    check('price', 'Price must be a positive number').isFloat({ min: 0 }),
+    check('price').optional().isFloat({ min: 0 }),
     check('category', 'Category is required').not().isEmpty()
   ], 
   async (req, res) => {
