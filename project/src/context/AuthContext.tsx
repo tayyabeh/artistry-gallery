@@ -47,17 +47,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     username: string,
     password: string,
-    displayName?: string
+    displayName?: string,
+    phone?: string,
+    autoLogin: boolean = false
   ) => {
     try {
       const res = await authAPI.register({
         email,
         username,
         password,
-        displayName: displayName || username
+        displayName: displayName || username,
+        phone
       });
-      localStorage.setItem('token', res.data.token);
-      await refreshAuthState();
+      if (autoLogin) {
+        localStorage.setItem('token', res.data.token);
+        await refreshAuthState();
+      }
     } catch (error: any) {
       console.error('Signup failed:', error);
       throw error.response?.data?.message || 'Signup failed. Please try again with different credentials.';
