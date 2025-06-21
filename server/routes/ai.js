@@ -23,7 +23,7 @@ router.post('/generate', async (req, res) => {
     // Call Hugging Face text-to-image inference (raw bytes)
     const output = await hf.textToImage(
       {
-        model: 'prompthero/openjourney',
+        model: 'stabilityai/stable-diffusion-3-medium-diffusers',
         inputs: prompt,
         parameters: negativePrompt ? { negative_prompt: negativePrompt } : undefined,
         options: {wait_for_model: true}
@@ -33,8 +33,22 @@ router.post('/generate', async (req, res) => {
     console.log('HF OUTPUT =>', output); // yahan pura JSON/error dikh jayega
 
     // output is Uint8Array
-    const base64 = Buffer.from(output).toString('base64');
-    const dataUrl = `data:image/png;base64,${base64}`;
+    let base64;
+    let mimeType = 'image/png';
+    if (output instanceof Uint8Array) {
+      // raw: true returns Uint8Array (assume PNG)
+      base64 = Buffer.from(output).toString('base64');
+    } else if (output && typeof output.arrayBuffer === 'function') {
+      // Blob case – detect mime
+      mimeType = output.type || 'image/jpeg';
+      const ab = await output.arrayBuffer();
+      base64 = Buffer.from(ab).toString('base64');
+    } else {
+      console.error('Unexpected HF output type:', typeof output, output);
+      return res.status(500).json({ success: false, message: 'Unexpected HF output type' });
+    }
+
+    const dataUrl = `data:${mimeType};base64,${base64}`;
 
     res.json({ success: true, image: dataUrl });
   } catch (error) {

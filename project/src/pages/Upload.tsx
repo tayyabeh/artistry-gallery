@@ -106,7 +106,11 @@ const Upload: React.FC = () => {
     setIsGenerating(true);
     
     try {
-      const res = await aiAPI.generateImage(aiPrompt);
+      // If user selected a specific art style, append it to the prompt for Stable Diffusion
+      const styleAddon = aiStyle && aiStyle !== 'photorealistic' ? ` in ${aiStyle} style` : '';
+      const promptToSend = `${aiPrompt}${styleAddon}`;
+
+      const res = await aiAPI.generateImage(promptToSend);
       const img = res.data.image;
       setGeneratedImages([img]);
       setSelectedGeneratedImage(0);
@@ -341,7 +345,7 @@ const selectGeneratedImage = (index: number) => {
                               onClick={() => selectGeneratedImage(index)}
                             >
                               <img
-                                src={`${img}?w=300&h=300&fit=crop`}
+                                src={img}
                                 alt={`Generated image ${index + 1}`}
                                 className="w-full aspect-square object-cover"
                               />
