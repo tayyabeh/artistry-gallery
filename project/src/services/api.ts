@@ -99,8 +99,13 @@ export const authAPI = {
   deleteCover: () => api.delete<User>('/users/me/cover')
 };
 
+export const aiAPI = {
+  generateImage: (prompt: string, negativePrompt?: string) =>
+    api.post<{ image: string }>('/ai/generate', { prompt, negativePrompt })
+};
+
 export const artworkAPI = {
-  getAllArtworks: () => api.get<{ artworks: Artwork[] }>('/artworks'),
+  getAllArtworks: () => api.get<Artwork[]>('/artworks'),
   getArtworkById: (id: string) => api.get<{ artwork: Artwork, message?: string }>(`/artworks/${id}`),
   getRelatedArtworks: (id: string) => api.get<{ artworks: Artwork[] }>(`/artworks/${id}/related`),
   createArtwork: (artworkData: ArtworkFormData | FormData) => 

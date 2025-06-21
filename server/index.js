@@ -134,11 +134,13 @@ app.use('/api/auth', authRoutes);
 const usersRouter = require('./routes/users');
 const artworksRouter = require('./routes/artworks');
 const ordersRouter = require('./routes/orders');
+const aiRouter = require('./routes/ai');
 
 // Mount routes
 app.use('/api/users', usersRouter);
 app.use('/api/artworks', artworksRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/ai', aiRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
