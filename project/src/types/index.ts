@@ -12,12 +12,15 @@ export interface User {
   phone?: string;
   displayName?: string;
   avatar?: string;
+  profileImage?: string;
   coverImage?: string;
+  cover?: string;
+  _id?: string;
   bio?: string;
   location?: string;
   socialLinks?: SocialLinks;
-  following?: number;
-  followers?: number;
+  following?: string[] | number;
+  followers?: string[] | number;
   views?: number;
   downloads?: number;
   createdAt: string;
@@ -25,6 +28,7 @@ export interface User {
 
 export interface Artwork {
   id: string;
+  _id?: string;
   title: string;
   image: string;
   thumbnail?: string;
@@ -36,6 +40,10 @@ export interface Artwork {
   views: number;
   comments: number;
   downloads: number;
+  price?: number;
+  currency?: 'PKR' | 'USD';
+  isSold?: boolean;
+  likedBy?: string[];
   createdAt: string;
   isFavorited?: boolean;
 }
@@ -71,7 +79,7 @@ export interface AuthContextType {
 
 export interface MarketplaceItem extends Artwork {
   price: number;
-  currency: string;
+  currency: 'PKR' | 'USD';
   inStock: boolean;
 }
 
@@ -102,4 +110,22 @@ export interface Purchase {
     zipCode: string;
     country: string;
   };
+}
+
+// ---------------------------- Chat Types ----------------------------
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  sender: User;
+  content?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'file';
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  participants: User[];
+  lastMessage?: ChatMessage;
+  updatedAt: string;
 }

@@ -63,6 +63,14 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'artist', 'admin'],
     default: 'user'
   },
+  followers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   socialLinks: {
     website: String,
     twitter: String,

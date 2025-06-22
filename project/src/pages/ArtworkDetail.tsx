@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Layout from '../components/layout/Layout';
-import { mockCommentData } from '../data/mockData';
-import { artworkAPI, orderAPI } from '../services/api';
+
+import { artworkAPI, orderAPI, commentAPI } from '../services/api';
 import { Artwork, Comment, Purchase } from '../types';
 import { 
-  Heart, MessageCircle, Download, Share2, Pencil, 
+  Heart, MessageCircle, Download, Share2, 
   Clock, Tag, User, ArrowLeft, AlertCircle, Home as HomeIcon, RefreshCw
-} from 'lucide-react';
+ } from 'lucide-react';
+import { getAvatarUrl } from '../utils/avatar';
+import { useAuth } from '../context/AuthContext';
 import ArtworkGrid from '../components/artwork/ArtworkGrid';
 
 // Error boundary component to catch rendering errors
@@ -68,14 +70,18 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 const ArtworkDetail: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const preload = (location.state as { artwork?: Artwork })?.artwork;
+
   const [error, setError] = useState<string | null>(null);
   const { id } = useParams<{ id: string }>();
-  const [artwork, setArtwork] = useState<Artwork | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [artwork, setArtwork] = useState<Artwork | null>(preload ?? null);
+  const [isLoading, setIsLoading] = useState(!preload);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [related, setRelated] = useState<Artwork[]>([]);
   const [liked, setLiked] = useState(false);
+  const { user } = useAuth();
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -93,17 +99,32 @@ const ArtworkDetail: React.FC = () => {
         }
 
         const res = await artworkAPI.getArtworkById(id);
-        if (!res.data?.artwork) {
-          setError(res.data?.message ?? 'Artwork not found');
+        const fetched = (res.data as any).artwork ?? (res.data as any).data;
+        if (!fetched) {
+          // Fallback to mock data (useful in dev mode without backend)
+          const { mockArtworkData } = await import('../data/mockData');
+          const mockFound = mockArtworkData.find((a) => a.id === id);
+          if (mockFound) {
+            setArtwork(mockFound);
+            setLiked(false);
+            return;
+          }
+          setError((res.data as any)?.message ?? 'Artwork not found');
           return;
         }
         
-        setArtwork(res.data.artwork);
-        setLiked(res.data.artwork.isFavorited || false);
+        setArtwork(fetched);
+        if (user) {
+           setLiked(Array.isArray(fetched.likedBy) ? fetched.likedBy.includes(user.id) : false);
+         } else {
+           setLiked(false);
+         }
         
-        const relatedRes = await artworkAPI.getRelatedArtworks(id);
-        if (relatedRes.data?.artworks) {
-          setRelated(relatedRes.data.artworks);
+        if (id) {
+          const relatedRes = await artworkAPI.getRelatedArtworks(id);
+          if (relatedRes.data?.artworks) {
+            setRelated(relatedRes.data.artworks);
+          }
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load artwork';
@@ -116,31 +137,66 @@ const ArtworkDetail: React.FC = () => {
     fetchData();
   }, [id]);
 
-  const handleLike = () => {
-    setLiked(!liked);
-    if (artwork) {
-      setArtwork({
-        ...artwork,
-        likes: liked ? artwork.likes - 1 : artwork.likes + 1,
-        isFavorited: !liked
-      });
+  // Fetch related artworks whenever we already have artwork via preload
+  useEffect(() => {
+    const fetchRel = async () => {
+      if (!artwork) return;
+      try {
+        const relRes = await artworkAPI.getRelatedArtworks(artwork.id || artwork._id);
+        if (relRes.data?.artworks) setRelated(relRes.data.artworks);
+      } catch (err) {
+        console.error('Failed to fetch related artworks', err);
+      }
+    };
+    if (preload) fetchRel();
+  }, [artwork]);
+
+  // Fetch comments whenever artwork changes
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!artwork) return;
+      try {
+        const res = await commentAPI.getArtworkComments(artwork._id ?? artwork.id);
+        setComments(res.data);
+      } catch (err) {
+        console.error('Failed to fetch comments', err);
+      }
+    };
+    fetchComments();
+  }, [artwork?._id, artwork?.id]);
+
+  const handleLike = async () => {
+    if (!artwork) return;
+
+    try {
+      if (liked) {
+        const res = await artworkAPI.unlikeArtwork(artwork._id ?? artwork.id);
+        const updated = (res.data as any).artwork ?? (res.data as any).data ?? res.data;
+        setArtwork(updated);
+        setLiked(false);
+      } else {
+        const res = await artworkAPI.likeArtwork(artwork._id ?? artwork.id);
+        const updated = (res.data as any).artwork ?? (res.data as any).data ?? res.data;
+        setArtwork(updated);
+        setLiked(true);
+      }
+    } catch (err) {
+      console.error('Failed to toggle like', err);
     }
   };
 
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
     
-    // In a real app, this would be an API call to save the comment
-    const newCommentObj: Comment = {
-      id: `comment-${Date.now()}`,
-      user: mockCommentData[0].user, // Use the first mock user for this example
-      content: newComment,
-      createdAt: new Date().toISOString(),
-    };
-    
-    setComments([newCommentObj, ...comments]);
-    setNewComment('');
+    try {
+      if (!artwork) return;
+      const res = await commentAPI.addComment({ content: newComment, artworkId: artwork._id ?? artwork.id });
+      setComments([res.data, ...comments]);
+      setNewComment('');
+    } catch (err) {
+      console.error('Failed to add comment', err);
+    }
   };
 
   const handlePurchase = async () => {
@@ -163,7 +219,7 @@ const ArtworkDetail: React.FC = () => {
         }
       };
       
-      const response = await orderAPI.createOrder(purchase);
+      await orderAPI.createOrder(purchase);
       
       setPurchaseError(null);
     } catch (error) {
@@ -174,24 +230,54 @@ const ArtworkDetail: React.FC = () => {
     }
   };
 
+  
+
   const handleDownload = async () => {
     if (!artwork) return;
     
     setDownloadLoading(true);
+    
     setDownloadError(null);
     
     try {
-      const response = await orderAPI.downloadArtwork(artwork.id);
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${artwork.title}.jpg`);
-      document.body.appendChild(link);
-      link.click();
-      
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      // Fetch image directly and convert to PNG if needed
+      const imgUrl = artwork.image;
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imgUrl;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Image conversion failed'));
+                return;
+              }
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', `${artwork.title}.png`);
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              window.URL.revokeObjectURL(url);
+              resolve();
+            },
+            'image/png',
+            0.95
+          );
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Download failed';
       setDownloadError(errorMessage);
@@ -287,7 +373,7 @@ const ArtworkDetail: React.FC = () => {
               <img 
                 src={artwork.image} 
                 alt={artwork.title} 
-                className="w-full h-auto"
+                className="w-full max-h-[80vh] object-contain"
               />
               
               <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
@@ -313,7 +399,7 @@ const ArtworkDetail: React.FC = () => {
                   
                   <button 
                     onClick={handleDownload}
-                    className={`flex items-center ${downloadLoading ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400'} transition-colors`}
+                    className="hidden"
                     disabled={downloadLoading}
                   >
                     <Download size={20} />
@@ -324,27 +410,23 @@ const ArtworkDetail: React.FC = () => {
                 </div>
                 
                 <div className="flex space-x-2">
-                  <button 
-                    onClick={handlePurchase}
-                    className={`btn-primary ${purchaseLoading ? 'loading' : ''}`}
-                    disabled={purchaseLoading}
-                  >
-                    {purchaseLoading ? 'Processing...' : 'Purchase'}
-                  </button>
                   
-                  {purchaseError && (
-                    <div className="text-red-500 text-sm">{purchaseError}</div>
-                  )}
+                  
+                  
                   
                   <button className="btn-outline">
                     <Share2 size={18} className="mr-1" />
                     <span>Share</span>
                   </button>
                   
-                  <Link to="/editor" className="btn-primary">
-                    <Pencil size={18} className="mr-1" />
-                    <span>Edit</span>
-                  </Link>
+                  <button
+                    onClick={handleDownload}
+                    className={`btn-primary flex items-center px-4 py-2 text-lg ${downloadLoading ? 'loading' : ''}`}
+                    disabled={downloadLoading}
+                  >
+                    <Download size={24} className="mr-2" />
+                    {downloadLoading ? 'Downloading...' : 'Download'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -354,7 +436,14 @@ const ArtworkDetail: React.FC = () => {
               <h3 className="mb-4">Comments ({comments.length})</h3>
               
               <form onSubmit={handleCommentSubmit} className="mb-6">
-                <div className="flex">
+                <div className="flex items-center space-x-2">
+                  {user && (
+                    <img
+                      src={getAvatarUrl(user)}
+                      alt={user.displayName ?? user.username}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  )}
                   <input
                     type="text"
                     value={newComment}
@@ -377,27 +466,30 @@ const ArtworkDetail: React.FC = () => {
                   comments.map((comment) => {
                     // Ensure comment and its properties exist
                     const commentUser = comment?.user || {};
-                    const username = commentUser?.username || 'Unknown User';
-                    const avatar = commentUser?.avatar || 'https://via.placeholder.com/40';
+                    const username = (commentUser?.displayName || commentUser?.username) ?? 'Unknown User';
+                    const avatar = (commentUser?.avatar || commentUser?.profileImage || commentUser?.coverImage) ?? 'https://via.placeholder.com/40';
                     const content = comment?.content || '';
                     const commentDate = comment?.createdAt ? new Date(comment.createdAt) : new Date();
                     
                     return (
                       <div key={comment.id || Math.random().toString(36).substr(2, 9)} className="card p-4">
                         <div className="flex items-start">
-                          <img 
-                            src={avatar}
-                            alt={username}
-                            className="w-10 h-10 rounded-full mr-3 object-cover"
-                            onError={(e) => {
-                              // Fallback to placeholder if image fails to load
-                              const target = e.target as HTMLImageElement;
-                              target.src = 'https://via.placeholder.com/40';
-                            }}
-                          />
+                          <Link to={`/profile/${commentUser?.username ?? ''}`} className="mr-3 shrink-0">
+                            <img 
+                              src={getAvatarUrl(commentUser)}
+                              alt={username}
+                              className="w-10 h-10 rounded-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = 'https://via.placeholder.com/40';
+                              }}
+                            />
+                          </Link>
                           <div className="flex-1">
                             <div className="flex items-center">
-                              <h4 className="font-medium">{username}</h4>
+                              <Link to={`/profile/${commentUser?.username ?? ''}`} className="font-medium hover:underline">
+                                 {username}
+                               </Link>
                               <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
                                 {formatDate(commentDate.toString())}
                               </span>
@@ -429,19 +521,14 @@ const ArtworkDetail: React.FC = () => {
                 </p>
                 
                 <div className="flex items-center mb-4">
-                  <img 
-                    src={artwork.creator.avatar} 
-                    alt={artwork.creator.username} 
-                    className="w-10 h-10 rounded-full mr-3"
+                  <img
+                    src={getAvatarUrl(artwork.creator)}
+                    alt={artwork.creator.displayName || artwork.creator.username}
+                    className="w-10 h-10 rounded-full mr-3 object-cover"
                   />
-                  <div>
-                    <Link to={`/profile/${artwork.creator.id}`} className="font-medium hover:text-primary-600 transition-colors">
-                      {artwork.creator.username}
-                    </Link>
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
-                      {(artwork.creator.followers || 0).toLocaleString()} followers
-                    </div>
-                  </div>
+                  <Link to={`/profile/${artwork.creator.username}`} className="font-medium hover:text-primary-600 transition-colors">
+                    {artwork.creator.displayName || artwork.creator.username || 'Unknown Artist'}
+                  </Link>
                 </div>
                 
                 <div className="space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4">
@@ -449,24 +536,23 @@ const ArtworkDetail: React.FC = () => {
                     <Clock size={16} className="mr-2" />
                     <span>Created on {formatDate(artwork.createdAt)}</span>
                   </div>
-                  
                   <div className="flex items-center text-slate-600 dark:text-slate-400">
                     <Tag size={16} className="mr-2" />
-                    <span>Category: {artwork.category}</span>
+                    <span>
+                      Category: {typeof artwork.category === 'string' ? artwork.category : artwork.category?.name}
+                    </span>
                   </div>
-                  
                   <div className="flex items-center text-slate-600 dark:text-slate-400">
                     <User size={16} className="mr-2" />
                     <span>{artwork.views.toLocaleString()} views</span>
                   </div>
                 </div>
-                
                 <div className="mt-4">
                   <h4 className="font-medium mb-2">Tags</h4>
                   <div className="flex flex-wrap gap-2">
-                    {artwork.tags.map((tag) => (
-                      <span 
-                        key={tag} 
+                    {(artwork.tags || []).map((tag: string) => (
+                      <span
+                        key={tag}
                         className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-md text-sm text-slate-700 dark:text-slate-300"
                       >
                         #{tag}

@@ -1,21 +1,18 @@
 import { User, Artwork, Comment, MarketplaceItem } from '../types';
 
 export const artCategories = [
-  { id: 'digital-painting', label: 'Digital Painting' },
-  { id: '3d-art', label: '3D Art' },
-  { id: 'pixel-art', label: 'Pixel Art' },
-  { id: 'concept-art', label: 'Concept Art' },
-  { id: 'illustration', label: 'Illustration' },
-  { id: 'character-design', label: 'Character Design' },
-  { id: 'environment-art', label: 'Environment Art' },
-  { id: 'animation', label: 'Animation' },
-  { id: 'fantasy-art', label: 'Fantasy Art' },
-  { id: 'sci-fi-art', label: 'Sci-fi Art' },
-  { id: 'vector-art', label: 'Vector Art' },
-  { id: 'traditional-art', label: 'Traditional Art' },
+  { id: 'landscapes', label: 'Landscapes' },
+  { id: 'wildlife', label: 'Wildlife' },
+  { id: 'city-life', label: 'City Life' },
+  { id: 'portraits', label: 'Portraits' },
+  { id: 'abstract-art', label: 'Abstract Art' },
+  { id: 'digital-art', label: 'Digital Art' },
+  { id: 'fantasy', label: 'Fantasy' },
+  { id: 'minimalist', label: 'Minimalist' },
+  { id: 'nature', label: 'Nature' },
+  { id: 'street-art', label: 'Street Art' },
   { id: 'photography', label: 'Photography' },
-  { id: 'mixed-media', label: 'Mixed Media' },
-  { id: 'other', label: 'Other' }
+  { id: 'aesthetic-vibes', label: 'Aesthetic Vibes' }
 ];
 
 // Mock user data
@@ -85,7 +82,7 @@ export const mockArtworkData: Artwork[] = [
     creator: mockUserData[0],
     description: 'A futuristic cityscape with neon lights',
     tags: ['cyberpunk', 'city', 'neon'],
-    category: 'Digital Painting',
+    category: 'Digital Art',
     likes: 342,
     views: 1205,
     comments: 28,
@@ -100,7 +97,7 @@ export const mockArtworkData: Artwork[] = [
     creator: mockUserData[1],
     description: 'Mystical forest guardian',
     tags: ['fantasy', 'spirit', 'nature'],
-    category: 'Concept Art',
+    category: 'Fantasy',
     likes: 289,
     views: 876,
     comments: 15,

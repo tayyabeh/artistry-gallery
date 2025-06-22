@@ -20,7 +20,7 @@ const makeFullImageUrl = (req, imgPath) => {
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { category, featured, search, sort } = req.query;
+    const { category, featured, search, sort, creator } = req.query;
     
     // Build query object
     const query = {};
@@ -31,6 +31,7 @@ router.get('/', async (req, res) => {
     }
     
     if (featured === 'true') query.isFeatured = true;
+    if (creator) query.creator = creator;
     
     if (search) {
       query.$or = [
@@ -48,7 +49,7 @@ router.get('/', async (req, res) => {
     if (sort === 'price-high') sortOption = { price: -1 };
     
     const artworks = await Artwork.find(query)
-      .populate('creator', 'displayName avatar')
+      .populate('creator', 'displayName avatar username')
       .populate('category', 'name slug')
       .sort(sortOption)
       .lean();
@@ -85,7 +86,7 @@ router.get('/category/:slug', async (req, res) => {
     }
     
     const artworks = await Artwork.find({ category: category._id })
-      .populate('creator', 'displayName avatar')
+      .populate('creator', 'displayName avatar username')
       .sort({ createdAt: -1 });
       
     res.json({
@@ -194,13 +195,42 @@ router.post('/',
   }
 );
 
+// @route   GET /api/artworks/:id/related
+// @desc    Get other artworks by the same creator
+// @access  Public
+router.get('/:id/related', async (req, res) => {
+  try {
+    const artwork = await Artwork.findById(req.params.id).select('creator');
+    if (!artwork) {
+      return res.status(404).json({ message: 'Artwork not found' });
+    }
+
+    let others = await Artwork.find({ creator: artwork.creator, _id: { $ne: artwork._id } })
+      .populate('creator', 'displayName avatar username')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Convert IDs and make full image URLs
+    others = others.map((a) => ({
+      ...a,
+      id: a._id,
+      image: makeFullImageUrl(req, a.image),
+    }));
+
+    res.json({ artworks: others });
+  } catch (error) {
+    console.error('Error fetching related artworks:', error);
+    res.status(500).json({ message: 'Server error while fetching related artworks' });
+  }
+});
+
 // @route   GET /api/artworks/:id
 // @desc    Get single artwork
 // @access  Public
 router.get('/:id', async (req, res) => {
   try {
     const artwork = await Artwork.findById(req.params.id)
-      .populate('creator', 'displayName avatar')
+      .populate('creator', 'displayName avatar username')
       .populate('category', 'name slug');
       
     if (!artwork) {
@@ -214,9 +244,14 @@ router.get('/:id', async (req, res) => {
     artwork.views += 1;
     await artwork.save();
     
+    const artObj = {
+      ...((typeof artwork.toObject === 'function') ? artwork.toObject() : artwork),
+      id: artwork._id,
+      image: makeFullImageUrl(req, artwork.image),
+    };
     res.json({
       success: true,
-      data: artwork
+      data: artObj,
     });
   } catch (error) {
     console.error('Error fetching artwork:', error);
@@ -340,6 +375,77 @@ router.delete('/:id', auth, async (req, res) => {
       success: false,
       message: 'Server error while deleting artwork'
     });
+  }
+});
+
+// @route   PUT /api/artworks/like/:id
+// @desc    Like an artwork (idempotent)
+// @access  Private
+router.put('/like/:id', auth, async (req, res) => {
+  try {
+    const artwork = await Artwork.findById(req.params.id);
+    if (!artwork) {
+      return res.status(404).json({ success: false, message: 'Artwork not found' });
+    }
+
+    // Prevent multiple likes by same user
+    if (artwork.likedBy?.includes(req.user.id)) {
+      const artObj = {
+        ...((typeof artwork.toObject === 'function') ? artwork.toObject() : artwork),
+        id: artwork._id,
+        image: makeFullImageUrl(req, artwork.image),
+      };
+      return res.json({ artwork: artObj }); // already liked, no change
+    }
+
+    artwork.likedBy.push(req.user.id);
+    artwork.likes = (artwork.likes || 0) + 1;
+    await artwork.save();
+
+    const artObj = {
+      ...((typeof artwork.toObject === 'function') ? artwork.toObject() : artwork),
+      id: artwork._id,
+      image: makeFullImageUrl(req, artwork.image),
+    };
+    res.json({ artwork: artObj });
+  } catch (error) {
+    console.error('Error liking artwork:', error);
+    res.status(500).json({ success: false, message: 'Server error while liking artwork' });
+  }
+});
+
+// @route   PUT /api/artworks/unlike/:id
+// @desc    Unlike an artwork
+// @access  Private
+router.put('/unlike/:id', auth, async (req, res) => {
+  try {
+    const artwork = await Artwork.findById(req.params.id);
+    if (!artwork) {
+      return res.status(404).json({ success: false, message: 'Artwork not found' });
+    }
+
+    if (!artwork.likedBy?.includes(req.user.id)) {
+      const artObj = {
+        ...((typeof artwork.toObject === 'function') ? artwork.toObject() : artwork),
+        id: artwork._id,
+        image: makeFullImageUrl(req, artwork.image),
+      };
+      return res.json({ artwork: artObj }); // nothing to do
+    }
+
+    artwork.likedBy = artwork.likedBy.filter((u) => u.toString() !== req.user.id);
+    artwork.likes = Math.max((artwork.likes || 1) - 1, 0);
+    await artwork.save();
+
+    const artObj = {
+      ...((typeof artwork.toObject === 'function') ? artwork.toObject() : artwork),
+      id: artwork._id,
+      image: makeFullImageUrl(req, artwork.image),
+    };
+    res.json({ artwork: artObj });
+  } catch (error) {
+    console.error('Error unliking artwork:', error);
+    res.status(500).json({ success: false, message: 'Server error while unliking artwork' });
   }
 });
 
