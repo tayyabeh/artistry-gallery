@@ -1,16 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Artwork } from '../types';
 
-type CartItem = {
+export type CartItem = {
   artwork: Artwork;
   quantity: number;
 };
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (artwork: Artwork, quantity?: number) => void;
+  addToCart: (artwork: Artwork) => void;
   removeFromCart: (artworkId: string) => void;
-  updateQuantity: (artworkId: string, quantity: number) => void;
   clearCart: () => void;
   isInCart: (artworkId: string) => boolean;
   cartCount: number;
@@ -61,46 +60,49 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCartTotal(total);
   }, [items]);
 
-  const addToCart = (artwork: Artwork, quantity = 1) => {
-    setItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.artwork.id === artwork.id);
+  const addToCart = async (artwork: Artwork) => {
+    if (artwork.isSold) {
+      alert('This artwork is already sold out!');
+      return;
+    }
+    
+    try {
+      // Update backend first
+      const response = await fetch(`/api/artworks/${artwork.id}/sold`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
-      if (existingItem) {
-        return prevItems.map((item) =>
-          item.artwork.id === artwork.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      } else {
-        return [...prevItems, { artwork, quantity }];
-      }
-    });
-    
-    // Show cart when adding items
-    setShowCart(true);
-    
-    // Hide cart after 3 seconds
-    setTimeout(() => {
-      setShowCart(false);
-    }, 3000);
+      if (!response.ok) throw new Error('Failed to mark artwork as sold');
+      
+      // Then update local state
+      setItems((prevItems) => {
+        const existingItem = prevItems.find((item) => item.artwork.id === artwork.id);
+        
+        if (existingItem) {
+          return prevItems.map((item) =>
+            item.artwork.id === artwork.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+        }
+        
+        const updatedArtwork = { ...artwork, isSold: true };
+        return [...prevItems, { artwork: updatedArtwork, quantity: 1 }];
+      });
+    } catch (error) {
+      console.error('Error marking artwork as sold:', error);
+      alert('Failed to complete purchase. Please try again.');
+    }
   };
 
   const removeFromCart = (artworkId: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.artwork.id !== artworkId));
   };
 
-  const updateQuantity = (artworkId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(artworkId);
-      return;
-    }
-    
-    setItems((prevItems) =>
-      prevItems.map((item) =>
-        item.artwork.id === artworkId ? { ...item, quantity } : item
-      )
-    );
-  };
+
 
   const clearCart = () => {
     setItems([]);
@@ -114,7 +116,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     items,
     addToCart,
     removeFromCart,
-    updateQuantity,
     clearCart,
     isInCart,
     cartCount,

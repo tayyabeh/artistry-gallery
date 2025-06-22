@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAvatarUrl } from '../utils/avatar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
@@ -103,8 +104,8 @@ const Home: React.FC = () => {
                     className="px-6 py-3 bg-white/20 text-white font-medium rounded-lg hover:bg-white/30 transition-colors flex items-center"
                   >
                     <img 
-                      src={featuredArtwork.creator.avatar} 
-                      alt={featuredArtwork.creator.username} 
+                      src={getAvatarUrl(featuredArtwork.creator)} 
+                      alt={featuredArtwork.creator.displayName || featuredArtwork.creator.username} 
                       className="w-6 h-6 rounded-full mr-2 object-cover"
                     />
                     {featuredArtwork.creator.username}

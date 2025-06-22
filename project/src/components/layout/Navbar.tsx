@@ -20,7 +20,6 @@ const Navbar: React.FC = () => {
     { name: 'Upload', path: '/upload', icon: <Upload size={20} /> },
     { name: 'Marketplace', path: '/marketplace', icon: <ShoppingCart size={20} /> },
     { name: 'Messages', path: '/messages', icon: <MessageCircle size={20} /> },
-    { name: 'Orders', path: '/orders', icon: <ShoppingCart size={20} /> },
     { name: 'Profile', path: '/profile', icon: <User size={20} /> },
     { name: 'Settings', path: '/profile/settings', icon: <Settings size={20} /> },
   ];

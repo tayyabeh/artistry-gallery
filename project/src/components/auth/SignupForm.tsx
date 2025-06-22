@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle, Eye, EyeOff, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface SignupFormProps {
@@ -12,16 +12,21 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
+  const [isPolicyModalOpen, setPolicyModalOpen] = useState(false);
+
   // Field specific error states
   const [emailError, setEmailError] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [policyError, setPolicyError] = useState('');
 
   const { signup } = useAuth();
 
@@ -57,15 +62,28 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setEmailError(validateEmail(email));
-    setUsernameError(validateUsername(username));
-    setPasswordError(validatePassword(password));
-    setPhoneError(validatePhone(phone));
+    setPolicyError('');
 
-    if (emailError || usernameError || passwordError || phoneError) return;
+    // Validate fields
+    const emailErr = validateEmail(email);
+    const usernameErr = validateUsername(username);
+    const passwordErr = validatePassword(password);
+    const phoneErr = validatePhone(phone);
+
+    setEmailError(emailErr);
+    setUsernameError(usernameErr);
+    setPasswordError(passwordErr);
+    setPhoneError(phoneErr);
+
+    if (emailErr || usernameErr || passwordErr || phoneErr) return;
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+
+    if (!agreedToPolicy) {
+      setPolicyError('You must accept the terms and conditions.');
       return;
     }
 
@@ -84,6 +102,17 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
       setIsLoading(false);
     }
   };
+
+  const handleAcceptPolicy = () => {
+    setAgreedToPolicy(true);
+    setPolicyModalOpen(false);
+    setPolicyError('');
+  };
+
+  const handleOpenPolicy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setPolicyModalOpen(true);
+  }
 
   return (
     <motion.div
@@ -156,15 +185,24 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           <label htmlFor="password" className="block text-sm font-medium mb-1">
             Password
           </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input w-full"
-            placeholder="••••••••"
-            required
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input w-full pr-10"
+              placeholder="••••••••"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
           {passwordError && (
             <div className="mt-1 text-error-700">{passwordError}</div>
           )}
@@ -174,15 +212,24 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1">
             Confirm Password
           </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="input w-full"
-            placeholder="••••••••"
-            required
-          />
+          <div className="relative">
+            <input
+              id="confirmPassword"
+              type={showConfirmPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="input w-full pr-10"
+              placeholder="••••••••"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500"
+            >
+              {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
         </div>
         
         <div>
@@ -201,24 +248,38 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
             <div className="mt-1 text-error-700">{phoneError}</div>
           )}
         </div>
-        
-        <div className="flex items-center">
-          <input
-            id="terms"
-            type="checkbox"
-            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            required
-          />
-          <label htmlFor="terms" className="ml-2 block text-sm">
-            I agree to the{' '}
-            <a href="#" className="text-primary-600 hover:text-primary-500">
-              Terms of Service
-            </a>{' '}
-            and{' '}
-            <a href="#" className="text-primary-600 hover:text-primary-500">
-              Privacy Policy
-            </a>
-          </label>
+
+        <div>
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                id="terms"
+                type="checkbox"
+                checked={agreedToPolicy}
+                onChange={(e) => {
+                  setAgreedToPolicy(e.target.checked);
+                  if (e.target.checked) setPolicyError('');
+                }}
+                className="w-4 h-4 border border-gray-300 rounded bg-gray-50 focus:ring-3 focus:ring-primary-300"
+                required
+              />
+            </div>
+            <div className="ml-3 text-sm">
+              <label htmlFor="terms" className="font-light text-gray-500">
+                I accept the{' '}
+                <a 
+                  href="#" 
+                  onClick={handleOpenPolicy}
+                  className="font-medium text-primary-600 hover:underline cursor-pointer"
+                >
+                  Terms and Conditions
+                </a>
+              </label>
+            </div>
+          </div>
+          {policyError && (
+            <div className="mt-1 text-sm text-error-700">{policyError}</div>
+          )}
         </div>
         
         <button
@@ -226,7 +287,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           className="btn-primary w-full flex justify-center"
           disabled={isLoading}
         >
-          {isLoading ? 'Creating account...' : 'Create account'}
+          {isLoading ? 'Creating Account...' : 'Create Account'}
         </button>
         
         <div className="text-center mt-4">
@@ -242,9 +303,73 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           </p>
         </div>
       </form>
-        </>
+      </> 
       )}
+      <PrivacyPolicyModal 
+        isOpen={isPolicyModalOpen} 
+        onClose={() => setPolicyModalOpen(false)} 
+        onAccept={handleAcceptPolicy} 
+      />
     </motion.div>
+  );
+};
+
+interface PrivacyPolicyModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAccept: () => void;
+}
+
+const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose, onAccept }) => {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 20 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-xl font-semibold text-gray-900">Privacy Policy & Terms of Service</h3>
+              <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              <h4 className="font-bold text-gray-900 text-lg">1. Introduction</h4>
+              <p className="text-sm text-gray-700 leading-relaxed">Welcome to Artistry Gallery. We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p>
+              
+              <h4 className="font-bold text-gray-900 text-lg">2. Information We Collect</h4>
+              <p className="text-sm text-gray-700 leading-relaxed">We may collect personal information from you such as your name, email address, and phone number when you register on our site.</p>
+
+              <h4 className="font-bold text-gray-900 text-lg">3. User Agreement</h4>
+              <p className="text-sm text-gray-700 leading-relaxed">By creating an account, you agree to our terms of service. You agree not to upload content that is illegal, offensive, or infringes on the intellectual property rights of others. We reserve the right to remove any content and terminate accounts that violate these terms.</p>
+
+              <h4 className="font-bold text-gray-900 text-lg">4. Cookies</h4>
+              <p className="text-sm text-gray-700 leading-relaxed">We use cookies to enhance your experience. You can choose to disable cookies through your browser settings, but this may affect the functionality of the site.</p>
+            </div>
+            <div className="p-4 border-t flex justify-end space-x-4 bg-gray-50 rounded-b-lg">
+              <button onClick={onClose} className="btn-secondary">
+                Decline
+              </button>
+              <button onClick={onAccept} className="btn-primary">
+                Accept and Continue
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

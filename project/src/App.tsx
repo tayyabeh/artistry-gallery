@@ -9,11 +9,17 @@ import Home from './pages/Home';
 import Explore from './pages/Explore';
 import ArtworkDetail from './pages/ArtworkDetail';
 import Upload from './pages/Upload';
+import Sell from './pages/Sell';
+
+import Checkout from './pages/Checkout';
 import Marketplace from './pages/Marketplace';
+import MarketplaceArtworkPage from './pages/MarketplaceArtwork';
 import Profile from './pages/Profile';
+import PublicProfile from './pages/PublicProfile';
 import ProfileEdit from './components/profile/ProfileEdit';
 import Message from './pages/Message';
 import OrderHistory from './pages/OrderHistory';
+import ArtistProfile from './pages/ArtistProfile';
 import { AuthStatus } from './types';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -69,6 +75,24 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       } />
       
+      <Route path="/marketplace/artwork/:id" element={
+        <ProtectedRoute>
+          <MarketplaceArtworkPage />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/sell" element={
+        <ProtectedRoute>
+          <Sell />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/checkout" element={
+        <ProtectedRoute>
+          <Checkout />
+        </ProtectedRoute>
+      } />
+
       <Route path="/messages" element={
         <ProtectedRoute>
           <Message />
@@ -87,6 +111,13 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       } />
       
+      {/* Public profile view for other users */}
+      <Route path="/profile/:username" element={
+        <ProtectedRoute>
+          <PublicProfile />
+        </ProtectedRoute>
+      } />
+
       {/* Profile Routes */}
       <Route path="/profile" element={
         <ProtectedRoute>
@@ -94,6 +125,12 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       } />
       
+      <Route path="/profile/:id" element={
+        <ProtectedRoute>
+          <PublicProfile />
+        </ProtectedRoute>
+      } />
+
       <Route path="/profile/edit" element={
         <ProtectedRoute>
           <ProfileEdit />
@@ -105,6 +142,8 @@ const AppRoutes: React.FC = () => {
           <ProfileEdit />  {/* Temporarily using ProfileEdit, should be replaced with a dedicated Settings component */}
         </ProtectedRoute>
       } />
+      
+      <Route path="/artist/:username" element={<ArtistProfile />} />
       
       {/* Redirect to home for any unmatched routes */}
       <Route path="*" element={<Navigate to="/" replace />} />
