@@ -1,8 +1,32 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from 'react';
+import ChatList from '../components/chat/ChatList';
+import ChatWindow from '../components/chat/ChatWindow';
+import { ChatProvider, useChat } from '../context/ChatContext';
 import "./Message.css";
+import Layout from '../components/layout/Layout';
 
-interface ChatMessage {
-  id: number;
+// ---------------- Chat Page ----------------
+const ChatLayout: React.FC = () => {
+  const { conversations } = useChat();
+  return (
+    <div className="flex flex-1 h-full w-full min-h-0">
+      <ChatList conversations={conversations} />
+      <ChatWindow />
+    </div>
+  );
+};
+
+const MessagePage: React.FC = () => (
+  <Layout disablePadding>
+    <ChatProvider>
+      <ChatLayout />
+    </ChatProvider>
+  </Layout>
+);
+
+export default MessagePage;
+/*
+ number;
   sender: string;
   content: string;
   timestamp: string;
@@ -87,3 +111,4 @@ export default function Message() {
     </div>
   );
 }
+*/

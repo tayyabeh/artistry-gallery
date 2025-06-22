@@ -43,17 +43,35 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [items]);
 
   const addToWishlist = (artwork: Artwork) => {
-    setItems((prevItems) => {
-      // Check if item already exists in wishlist
-      const exists = prevItems.some((item) => item.id === artwork.id);
-      if (exists) return prevItems;
-      
-      return [...prevItems, artwork];
-    });
+    const savedWishlist = localStorage.getItem('artistry_wishlist');
+    let wishlistItems: Artwork[] = [];
+    if (savedWishlist) {
+      try {
+        wishlistItems = JSON.parse(savedWishlist);
+      } catch (error) {
+        console.error('Failed to parse wishlist from localStorage', error);
+      }
+    }
+    const exists = wishlistItems.some((item) => item.id === artwork.id);
+    if (exists) return;
+    wishlistItems.push(artwork);
+    localStorage.setItem('artistry_wishlist', JSON.stringify(wishlistItems));
+    setItems(wishlistItems);
   };
 
   const removeFromWishlist = (artworkId: string) => {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== artworkId));
+    const savedWishlist = localStorage.getItem('artistry_wishlist');
+    let wishlistItems: Artwork[] = [];
+    if (savedWishlist) {
+      try {
+        wishlistItems = JSON.parse(savedWishlist);
+      } catch (error) {
+        console.error('Failed to parse wishlist from localStorage', error);
+      }
+    }
+    const newWishlistItems = wishlistItems.filter((item) => item.id !== artworkId);
+    localStorage.setItem('artistry_wishlist', JSON.stringify(newWishlistItems));
+    setItems(newWishlistItems);
   };
 
   const isInWishlist = (artworkId: string) => {
