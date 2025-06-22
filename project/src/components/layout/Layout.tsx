@@ -7,9 +7,10 @@ import WishlistPanel from '../wishlist/WishlistPanel';
 
 interface LayoutProps {
   children: React.ReactNode;
+  disablePadding?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ children, disablePadding = false }) => {
   const location = useLocation();
   
   const pageVariants = {
@@ -45,7 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             exit="out"
             variants={pageVariants}
             transition={pageTransition}
-            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
+            className={disablePadding ? 'w-full h-full flex flex-col overflow-hidden' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}
           >
             {children}
           </motion.div>

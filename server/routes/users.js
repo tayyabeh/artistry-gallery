@@ -157,6 +157,118 @@ router.put('/me', auth, async (req, res) => {
   }
 });
 
+// Search users by username or displayName
+router.get('/search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json([]);
+    const regex = new RegExp(q, 'i');
+
+    const users = await User.find({
+      $or: [{ username: regex }, { displayName: regex }],
+      
+    })
+      .select('username displayName avatar _id')
+      .limit(10);
+    res.json(users);
+  } catch (err) {
+    console.error('User search error', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// Follow a user
+router.put('/follow/:id', auth, async (req, res) => {
+  try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ message: "You can't follow yourself" });
+    }
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    const me = await User.findById(req.user.id);
+
+    if (target.followers.includes(req.user.id)) {
+      return res.json({ message: 'Already followed' });
+    }
+
+    target.followers.push(req.user.id);
+    me.following.push(req.params.id);
+    await target.save();
+    await me.save();
+
+    res.json({ followersCount: target.followers.length, followingCount: me.following.length });
+  } catch (err) {
+    console.error('Follow error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Unfollow a user
+router.put('/unfollow/:id', auth, async (req, res) => {
+  try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ message: "You can't unfollow yourself" });
+    }
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    const me = await User.findById(req.user.id);
+
+    target.followers = target.followers.filter((u) => u.toString() !== req.user.id);
+    me.following = me.following.filter((u) => u.toString() !== req.params.id);
+
+    await target.save();
+    await me.save();
+
+    res.json({ followersCount: target.followers.length, followingCount: me.following.length });
+  } catch (err) {
+    console.error('Unfollow error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Public profile
+router.get('/profile/:username', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username }).select('-password -resetPasswordToken -resetPasswordExpire -emailVerificationToken -emailVerificationExpire');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    let artworks = await Artwork.find({ creator: user._id })
+      .select('title image thumbnail likes comments downloads views createdAt')
+      .populate('creator', 'username avatar profileImage')
+      .lean();
+
+    // Normalize ids for frontend (id instead of _id)
+    artworks = artworks.map(a => {
+      const fullImage = a.image ? `${req.protocol}://${req.get('host')}${a.image}` : a.image;
+      const thumb = a.thumbnail ? `${req.protocol}://${req.get('host')}${a.thumbnail}` : a.thumbnail;
+      return { ...a, id: a._id.toString(), image: fullImage, thumbnail: thumb };
+    });
+
+    // Build user object with absolute asset URLs and id
+    const userObj = {
+      ...user.toObject(),
+      id: user._id.toString(),
+      avatar: user.avatar ? `${req.protocol}://${req.get('host')}${user.avatar}` : user.avatar,
+      coverImage: user.cover ? `${req.protocol}://${req.get('host')}${user.cover}` : undefined,
+      followers: user.followers.map((id) => id.toString()),
+      following: user.following.map((id) => id.toString())
+    };
+    if (userObj.avatar) {
+      userObj.avatar = `${req.protocol}://${req.get('host')}${user.avatar}`;
+    }
+    if (userObj.cover) {
+      userObj.coverImage = `${req.protocol}://${req.get('host')}${user.cover}`;
+    }
+
+    res.json({ user: userObj, artworks });
+  } catch (err) {
+    console.error('Public profile error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Upload profile photo
 router.post('/me/avatar', auth, uploadSingle('avatar'), async (req, res) => {
   try {

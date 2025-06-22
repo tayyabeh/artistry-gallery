@@ -6,14 +6,19 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-
+const http = require('http');
+const server = http.createServer(app);
+const { Server: SocketServer } = require('socket.io');
 // CORS configuration
 const corsOptions = {
   origin: true, // Allow all origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
-  credentials: true
+  credentials: true,
 };
+const io = new SocketServer(server, { cors: corsOptions });
+
+
 
 // Middleware
 app.use(cors(corsOptions));
@@ -134,13 +139,11 @@ app.use('/api/auth', authRoutes);
 const usersRouter = require('./routes/users');
 const artworksRouter = require('./routes/artworks');
 const ordersRouter = require('./routes/orders');
-const aiRouter = require('./routes/ai');
 
 // Mount routes
 app.use('/api/users', usersRouter);
 app.use('/api/artworks', artworksRouter);
 app.use('/api/orders', ordersRouter);
-app.use('/api/ai', aiRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -152,9 +155,23 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/comments', require('./routes/comments'));
+// Chat routes
+app.use('/api/conversations', require('./routes/conversations'));
+app.use('/api/messages', require('./routes/messages'));
+
+io.on('connection', (socket) => {
+  console.log('💬 Socket connected', socket.id);
+  socket.on('join', (conversationId) => {
+    socket.join(conversationId);
+  });
+  socket.on('message', (msg) => {
+    // echo to room
+    io.to(msg.conversationId).emit('message', msg);
+  });
+});
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`✨ Server running on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
 });

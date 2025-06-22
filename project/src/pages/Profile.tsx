@@ -2,14 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Layout from '../components/layout/Layout';
 import ArtworkGrid from '../components/artwork/ArtworkGrid';
+import { getAvatarUrl } from '../utils/avatar';
 import CoverPhotoUpload from '../components/profile/CoverPhotoUpload';
-// import { mockUserData, mockArtworkData } from '../data/mockData';
-import { 
-  Heart, Download, Users, Edit, Settings, 
-  ShoppingBag, Clock, Pencil,
-  Facebook, Twitter, Instagram, Globe, Bell,
-  CheckCircle, User, Share2
-} from 'lucide-react';
+
+import { Heart, Download, Users, Edit, Settings, ShoppingBag, Clock, Share2, CheckCircle, Twitter, Instagram, Facebook, Globe, User } from 'lucide-react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { artworkAPI } from '../services/api';
 import { Artwork } from '../types';
@@ -18,7 +14,11 @@ import { authAPI } from '../services/api';
 import ProfilePhotoUpload from '../components/profile/ProfilePhotoUpload';
 
 const Profile: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('artwork');
+  const [activeTab, setActiveTab] = useState<string>('artwork');
+  const [followers, setFollowers] = useState<User[]>([]);
+  const [following, setFollowing] = useState<User[]>([]);
+  const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
+  const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
@@ -182,17 +182,11 @@ const Profile: React.FC = () => {
   useEffect(() => {
     const fetchUserArtworks = async () => {
       try {
-        const res = await artworkAPI.getAllArtworks();
-        console.log('All Artworks API Response:', res.data);
-        const all: Artwork[] = res.data;
-        const mine = all.filter((art: any) => {
-          if (!art.creator) return false;
-          if (typeof art.creator === 'string') return art.creator === currentUser.id;
-          return art.creator === currentUser.id || art.creator._id === currentUser.id || art.creator.id === currentUser.id;
-        });
-        console.log('Filtered User Artworks:', mine);
-        setAllUserArtworks(mine);
-        setDisplayedArtworks(mine.slice(0, ARTWORKS_PER_PAGE));
+        const creatorId = (currentUser as any).id || (currentUser as any)._id;
+        const res = await artworkAPI.getAllArtworks({ creator: creatorId });
+        console.log('User Artworks API Response:', res.data);
+        setAllUserArtworks(res.data);
+        setDisplayedArtworks(res.data.slice(0, ARTWORKS_PER_PAGE));
         setArtworksPage(1);
       } catch (err) {
         console.error('Failed to load user artworks', err);
@@ -233,6 +227,51 @@ const Profile: React.FC = () => {
     navigator.clipboard.writeText(profileUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const res = await userAPI.getPublicProfile(user.username);
+        setUserData(res.data.user);
+        setAllUserArtworks(res.data.artworks);
+        setDisplayedArtworks(res.data.artworks.slice(0, 12));
+        setHasMore(res.data.artworks.length > 12);
+        
+        // Fetch followers and following details
+        if (res.data.user.followers && Array.isArray(res.data.user.followers)) {
+          fetchUsers(res.data.user.followers, setFollowers, setIsLoadingFollowers);
+        }
+        if (res.data.user.following && Array.isArray(res.data.user.following)) {
+          fetchUsers(res.data.user.following, setFollowing, setIsLoadingFollowing);
+        }
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+        setError('Failed to load profile data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (user.username) {
+      fetchData();
+    }
+  }, [user.username]);
+  
+  // Helper function to fetch user details for followers/following
+  const fetchUsers = async (userIds: string[], setUsers: (users: User[]) => void, setLoading: (loading: boolean) => void) => {
+    try {
+      setLoading(true);
+      const users = await Promise.all(
+        userIds.map(id => userAPI.getPublicProfile(id).then(res => res.data.user))
+      );
+      setUsers(users);
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -525,51 +564,89 @@ const Profile: React.FC = () => {
           
           {activeTab === 'followers' && (
             <div>
-              <h2 className="text-xl font-bold mb-6">Followers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Mock follower data */}
-                {Array(12).fill(0).map((_, i) => (
-                  <div key={i} className="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                    <img 
-                      src={`https://randomuser.me/api/portraits/${i % 2 === 0 ? 'women' : 'men'}/${(i % 70) + 1}.jpg`} 
-                      alt="Follower" 
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                    <div className="ml-3 flex-1">
-                      <p className="font-medium">User #{i+1}</p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">@username{i+1}</p>
-                    </div>
-                    <button className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-sm font-medium">
-                      Following
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <h2 className="text-xl font-bold mb-6">Followers ({followers.length})</h2>
+              {isLoadingFollowers ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+                </div>
+              ) : followers.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {followers.map((follower) => (
+                    <RouterLink 
+                      key={follower.id || follower._id}
+                      to={`/profile/${follower.username}`}
+                      className="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <img 
+                        src={getAvatarUrl(follower)}
+                        alt={follower.displayName || follower.username}
+                        className="w-12 h-12 rounded-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/default-avatar.png';
+                        }}
+                      />
+                      <div className="ml-3 flex-1 min-w-0">
+                        <p className="font-medium truncate">{follower.displayName || follower.username}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 truncate">@{follower.username}</p>
+                      </div>
+                    </RouterLink>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                  No followers yet
+                </div>
+              )}
             </div>
           )}
           
           {activeTab === 'following' && (
             <div>
-              <h2 className="text-xl font-bold mb-6">Following</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Mock following data */}
-                {Array(9).fill(0).map((_, i) => (
-                  <div key={i} className="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                    <img 
-                      src={`https://randomuser.me/api/portraits/${i % 2 === 0 ? 'men' : 'women'}/${(i % 70) + 30}.jpg`} 
-                      alt="Following" 
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                    <div className="ml-3 flex-1">
-                      <p className="font-medium">Artist #{i+1}</p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">@artist{i+1}</p>
-                    </div>
-                    <button className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-sm font-medium">
-                      Following
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <h2 className="text-xl font-bold mb-6">Following ({following.length})</h2>
+              {isLoadingFollowing ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+                </div>
+              ) : following.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {following.map((followedUser) => (
+                    <RouterLink 
+                      key={followedUser.id || followedUser._id}
+                      to={`/profile/${followedUser.username}`}
+                      className="flex items-center p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <img 
+                        src={getAvatarUrl(followedUser)}
+                        alt={followedUser.displayName || followedUser.username}
+                        className="w-12 h-12 rounded-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/default-avatar.png';
+                        }}
+                      />
+                      <div className="ml-3 flex-1 min-w-0">
+                        <p className="font-medium truncate">{followedUser.displayName || followedUser.username}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 truncate">@{followedUser.username}</p>
+                      </div>
+                      <button 
+                        className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-sm font-medium hover:bg-indigo-200 dark:hover:bg-indigo-800/50 transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // Handle unfollow logic here
+                        }}
+                      >
+                        Following
+                      </button>
+                    </RouterLink>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                  Not following anyone yet
+                </div>
+              )}
             </div>
           )}
           

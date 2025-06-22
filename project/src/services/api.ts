@@ -96,16 +96,19 @@ export const authAPI = {
     });
   },
   deleteAvatar: () => api.delete<User>('/users/me/avatar'),
-  deleteCover: () => api.delete<User>('/users/me/cover')
+  deleteCover: () => api.delete<User>('/users/me/cover'),
+  searchUsers: (q: string) => api.get<User[]>(`/users/search`, { params: { q } })
 };
 
-export const aiAPI = {
-  generateImage: (prompt: string, negativePrompt?: string) =>
-    api.post<{ image: string }>('/ai/generate', { prompt, negativePrompt })
+export const chatAPI = {
+  getConversations: () => api.get('/conversations'),
+  createConversation: (participantId: string) => api.post('/conversations', { participantId }),
+  getMessages: (conversationId: string) => api.get(`/messages/${conversationId}`),
+  sendMessage: (payload: { conversationId: string; content?: string; mediaUrl?: string; mediaType?: string }) => api.post('/messages', payload),
 };
 
 export const artworkAPI = {
-  getAllArtworks: () => api.get<Artwork[]>('/artworks'),
+  getAllArtworks: (params: Record<string, any> = {}) => api.get<Artwork[]>('/artworks', { params }),
   getArtworkById: (id: string) => api.get<{ artwork: Artwork, message?: string }>(`/artworks/${id}`),
   getRelatedArtworks: (id: string) => api.get<{ artworks: Artwork[] }>(`/artworks/${id}/related`),
   createArtwork: (artworkData: ArtworkFormData | FormData) => 
@@ -139,6 +142,15 @@ export const orderAPI = {
       responseType: 'blob'
     });
   }
+};
+
+
+// User / social APIs
+export const userAPI = {
+  searchUsers: (query: string) => api.get<User[]>('/users/search', { params: { q: query } }),
+  getPublicProfile: (username: string) => api.get<{ user: User; artworks: Artwork[] }>(`/users/profile/${encodeURIComponent(username)}`),
+  follow: (id: string) => api.put(`/users/follow/${id}`),
+  unfollow: (id: string) => api.put(`/users/unfollow/${id}`)
 };
 
 export default api;

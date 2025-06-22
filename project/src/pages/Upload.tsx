@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { Upload as UploadIcon, X, Image as ImageIcon, Sparkles, LinkIcon, Globe, Lock, User, Users, Clock, Palette, Wand2, TextCursorInput } from 'lucide-react';
 import Layout from '../components/layout/Layout';
-import { artworkAPI, aiAPI } from '../services/api';
+import { artworkAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { artCategories } from '../data/mockData';
@@ -100,31 +100,30 @@ const Upload: React.FC = () => {
     setPreviewUrl(null);
   };
 
-  const handleAIGenerate = async () => {
+  const handleAIGenerate = () => {
     if (!aiPrompt.trim()) return;
     
     setIsGenerating(true);
     
-    try {
-      // If user selected a specific art style, append it to the prompt for Stable Diffusion
-      const styleAddon = aiStyle && aiStyle !== 'photorealistic' ? ` in ${aiStyle} style` : '';
-      const promptToSend = `${aiPrompt}${styleAddon}`;
-
-      const res = await aiAPI.generateImage(promptToSend);
-      const img = res.data.image;
-      setGeneratedImages([img]);
-      setSelectedGeneratedImage(0);
-      setPreviewUrl(img);
-      // Pre-fill title
+    // Simulate AI image generation (in a real app, you would call an API)
+    setTimeout(() => {
+      // These would be the returned image URLs from an AI service
+      const mockGeneratedImages = [
+        'https://images.unsplash.com/photo-1586943353950-95bdbe559c6b',
+        'https://images.unsplash.com/photo-1585468274952-66591eb14165',
+        'https://images.unsplash.com/photo-1649180556628-9ba704115795',
+        'https://images.unsplash.com/photo-1655721530791-59f5d8380069'
+      ];
+      
+      setGeneratedImages(mockGeneratedImages);
+      setSelectedGeneratedImage(0); // Select the first one by default
+      setIsGenerating(false);
+      
+      // Pre-fill title from prompt
       if (!title) {
         setTitle(aiPrompt.split(' ').slice(0, 5).join(' '));
       }
-    } catch (err) {
-      console.error('AI generate error', err);
-      alert('Failed to generate image');
-    } finally {
-      setIsGenerating(false);
-    }
+    }, 2000);
   };
 
   const handleCreatePin = async () => {
@@ -345,7 +344,7 @@ const selectGeneratedImage = (index: number) => {
                               onClick={() => selectGeneratedImage(index)}
                             >
                               <img
-                                src={img}
+                                src={`${img}?w=300&h=300&fit=crop`}
                                 alt={`Generated image ${index + 1}`}
                                 className="w-full aspect-square object-cover"
                               />

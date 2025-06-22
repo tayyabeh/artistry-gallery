@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import { Artwork, MarketplaceItem } from '../types';
-import { mockArtworkData } from '../data/mockData';
+import { mockArtworkData, artCategories } from '../data/mockData';
 import { Search, Filter, ShoppingCart, Heart, Tag, X, ChevronDown, ChevronsUpDown, Star, StarHalf, ShoppingBag } from 'lucide-react';
+
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 
@@ -14,16 +15,54 @@ const Marketplace: React.FC = () => {
   const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<MarketplaceItem[]>([]);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [sortOption, setSortOption] = useState('popular');
+
   const [isLoading, setIsLoading] = useState(true);
 
-  const categories = [
-    'All', 'Paintings', 'Digital Art', 'Photography', 
-    'Sculptures', 'Illustrations', 'Prints', 'Other'
-  ];
+  useEffect(() => {
+    setIsLoading(true);
+    // Simulate fetching data with a timeout
+    setTimeout(() => {
+      let userItems: MarketplaceItem[] = [];
+      const stored = localStorage.getItem('user_marketplace_items');
+      if (stored) {
+        try {
+          userItems = JSON.parse(stored).map((item: any) => ({
+            ...item,
+            currency: item.currency || 'USD',
+            inStock: item.inStock ?? true,
+            isOnSale: false,
+            discount: 0,
+            rating: item.rating || 4,
+            reviewCount: item.reviewCount || 0,
+          }));
+        } catch (err) {
+          console.error('Failed to parse user marketplace items', err);
+        }
+      }
+
+      const mockItems: MarketplaceItem[] = mockArtworkData.map((artwork) => ({
+        ...artwork,
+        price: Math.floor(Math.random() * 1000) + 20,
+        currency: 'USD',
+        inStock: Math.random() > 0.2,
+        isOnSale: Math.random() > 0.7,
+        discount: Math.random() > 0.7 ? Math.floor(Math.random() * 40) + 10 : 0,
+        rating: 3 + Math.random() * 2,
+        reviewCount: Math.floor(Math.random() * 50),
+      }));
+
+      const merged = [...userItems, ...mockItems];
+      setMarketplaceItems(merged);
+      setFilteredItems(merged);
+      setIsLoading(false);
+    }, 500); // Shorter delay for refresh
+  }, []);
+
+  const categories = artCategories.map(c => c.id);
 
   const sortOptions = [
     { value: 'popular', label: 'Most Popular' },
@@ -32,54 +71,26 @@ const Marketplace: React.FC = () => {
     { value: 'price-high', label: 'Price: High to Low' }
   ];
 
-  // Convert artwork data to marketplace items
   useEffect(() => {
-    setIsLoading(true);
-    // Transform mockArtworkData to include price, currency, and inStock status
-    const transformedData: MarketplaceItem[] = mockArtworkData.map(artwork => ({
-      ...artwork,
-      price: Math.floor(Math.random() * 1000) + 20, // Random price between $20 and $1020
-      currency: 'USD',
-      inStock: Math.random() > 0.2, // 80% chance of being in stock
-      // Add additional marketplace properties
-      isOnSale: Math.random() > 0.7,
-      discount: Math.random() > 0.7 ? Math.floor(Math.random() * 40) + 10 : 0, // 10-50% discount
-      rating: 3 + Math.random() * 2, // Rating between 3-5
-      reviewCount: Math.floor(Math.random() * 50),
-    }));
-
-    setMarketplaceItems(transformedData);
-    setFilteredItems(transformedData);
-    setIsLoading(false);
-  }, []);
-
-  // Filter and sort items
-  useEffect(() => {
-    if (marketplaceItems.length === 0) return;
-
-    let filtered = [...marketplaceItems];
-    
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(item => 
-        item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.creator.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    }
+    let filtered = marketplaceItems;
     
     // Filter by category
-    if (selectedCategory && selectedCategory !== 'All') {
-      filtered = filtered.filter(item => 
-        item.category.toLowerCase() === selectedCategory.toLowerCase()
-      );
+    if (selectedCategory && selectedCategory !== 'all') {
+      filtered = filtered.filter(item => item.category === selectedCategory);
     }
     
     // Filter by price range
     filtered = filtered.filter(item => {
       return item.price >= priceRange[0] && item.price <= priceRange[1];
     });
+    
+    // Filter by search term
+    filtered = filtered.filter(item => 
+      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.creator.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
     
     // Sort the filtered items
     switch (sortOption) {
@@ -99,7 +110,7 @@ const Marketplace: React.FC = () => {
     }
     
     setFilteredItems(filtered);
-  }, [marketplaceItems, searchTerm, selectedCategory, priceRange, sortOption]);
+  }, [marketplaceItems, selectedCategory, priceRange, searchTerm, sortOption]);
 
   const handleAddToCart = (item: MarketplaceItem) => {
     // Convert MarketplaceItem to compatible Artwork format
@@ -190,9 +201,9 @@ const Marketplace: React.FC = () => {
                   <button className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-medium hover:bg-indigo-50 transition-colors">
                     Start Browsing
                   </button>
-                  <button className="bg-transparent border border-white text-white px-6 py-2 rounded-lg font-medium hover:bg-white/10 transition-colors">
+                  <Link to="/sell" className="bg-transparent border border-white text-white px-6 py-2 rounded-lg font-medium hover:bg-white/10 transition-colors">
                     Sell Your Art
-                  </button>
+                  </Link>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 md:w-1/3">
@@ -296,18 +307,24 @@ const Marketplace: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <h3 className="font-medium mb-3">Category</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map(category => (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className={`px-4 py-2 rounded-full text-sm font-medium ${selectedCategory === 'all' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
+                    >
+                      All
+                    </button>
+                    {artCategories.map(category => (
                       <button
-                        key={category}
-                        onClick={() => setSelectedCategory(category === 'All' ? null : category)}
-                        className={`px-3 py-1 rounded-full text-sm ${
-                          (category === 'All' && !selectedCategory) || category === selectedCategory
-                            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                            : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
-                        }`}
+                        key={category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium ${selectedCategory === category.id 
+                          ? 'bg-blue-600 text-white' 
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
                       >
-                        {category}
+                        {category.label}
                       </button>
                     ))}
                   </div>
@@ -335,7 +352,7 @@ const Marketplace: React.FC = () => {
                 <div className="flex items-end">
                   <button
                     onClick={() => {
-                      setSelectedCategory(null);
+                      setSelectedCategory('all');
                       setPriceRange([0, 1000]);
                       setSearchTerm('');
                     }}
@@ -349,117 +366,10 @@ const Marketplace: React.FC = () => {
             </motion.div>
           )}
 
-          {/* Featured Products */}
-          <div className="mb-10">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Featured Artwork</h2>
-              <Link to="/featured" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-                View all
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {marketplaceItems.slice(0, 4).map((item) => (
-                <div 
-                  key={item.id} 
-                  className="group bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <div className="relative aspect-square overflow-hidden">
-                    <img 
-                      src={item.image} 
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute top-2 right-2 flex flex-col gap-2">
-                      <button 
-                        className={`w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center ${
-                          isInWishlist(item.id) 
-                            ? 'text-red-500' 
-                            : 'text-slate-400 hover:text-red-500'
-                        } transition-colors`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toggleWishlist(item);
-                        }}
-                      >
-                        <Heart size={16} fill={isInWishlist(item.id) ? 'currentColor' : 'none'} />
-                      </button>
-                    </div>
-                    {item.isOnSale && (
-                      <div className="absolute top-2 left-2 bg-rose-500 text-white text-xs font-medium px-2 py-1 rounded">
-                        {item.discount}% OFF
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <Link to={`/artwork/${item.id}`} className="block">
-                      <h3 className="font-medium text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                        {item.title}
-                      </h3>
-                      <div className="flex items-center mt-1 mb-2">
-                        <img
-                          src={item.creator.avatar}
-                          alt={item.creator.username}
-                          className="w-5 h-5 rounded-full mr-2"
-                        />
-                        <span className="text-sm text-slate-600 dark:text-slate-400">
-                          {item.creator.username}
-                        </span>
-                      </div>
-                      {item.rating && (
-                        <div className="flex items-center mb-2">
-                          <div className="flex text-amber-400 mr-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <span key={star}>
-                                {star <= Math.floor(item.rating) ? (
-                                  <Star size={14} />
-                                ) : star - 0.5 <= item.rating ? (
-                                  <StarHalf size={14} />
-                                ) : (
-                                  <Star size={14} className="text-slate-300 dark:text-slate-600" />
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                          <span className="text-xs text-slate-600 dark:text-slate-400">
-                            ({item.reviewCount})
-                          </span>
-                        </div>
-                      )}
-                    </Link>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white">
-                          {formatPrice(calculateDiscountedPrice(item))}
-                        </div>
-                        {item.isOnSale && (
-                          <div className="text-xs text-slate-500 dark:text-slate-400 line-through">
-                            {formatPrice(item.price)}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center ${
-                          isInCart(item.id)
-                            ? 'bg-green-500 hover:bg-green-600 text-white'
-                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                        }`}
-                        onClick={() => handleAddToCart(item)}
-                        disabled={!item.inStock}
-                      >
-                        <ShoppingCart size={14} className="mr-1" />
-                        {isInCart(item.id) ? 'In Cart' : 'Add to Cart'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Product Listing */}
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">All Artwork ({filteredItems.length})</h2>
+              <h2 className="text-xl font-semibold">Marketplace ({filteredItems.length})</h2>
             </div>
             {filteredItems.length === 0 ? (
               <div className="text-center py-12">
@@ -467,7 +377,7 @@ const Marketplace: React.FC = () => {
                 <button
                   onClick={() => {
                     setSearchTerm('');
-                    setSelectedCategory(null);
+                    setSelectedCategory('all');
                     setPriceRange([0, 1000]);
                   }}
                   className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
@@ -517,7 +427,7 @@ const Marketplace: React.FC = () => {
                       )}
                     </div>
                     <div className="p-4">
-                      <Link to={`/artwork/${item.id}`} className="block">
+                      <Link to={`/marketplace/artwork/${item.id}`} className="block">
                         <h3 className="font-medium text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                           {item.title}
                         </h3>
@@ -563,15 +473,6 @@ const Marketplace: React.FC = () => {
               </div>
             )}
           </div>
-
-          {/* Load More Button */}
-          {filteredItems.length > 0 && (
-            <div className="mt-10 text-center">
-              <button className="px-6 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                Load More
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </Layout>
